@@ -1,11 +1,16 @@
 // src/pages/Officer/AssignedComplaints.jsx
 import React, { useState, useMemo, useEffect } from 'react';
-import { Container, Row, Col, Card, Table, Badge, Button, Form, Spinner, Modal, Pagination } from 'react-bootstrap';
+import { Container, Row, Col, Card, Table, Button, Form, Modal, Pagination } from 'react-bootstrap';
 import { useAssignedComplaints, useUpdateComplaintStatus } from '../../hooks/useComplaints';
 import toast from 'react-hot-toast';
-import { formatComplaintCategory } from '../../utils/classificationUtils';
+import LoadingState from '../../components/common/LoadingState';
+import EmptyState from '../../components/common/EmptyState';
+import StatusBadge from '../../components/common/StatusBadge';
+import { useTranslation } from '../../i18n/LanguageContext';
+import { categoryLabel } from '../../i18n/labels';
 
 function AssignedComplaints() {
+  const { t, formatDate } = useTranslation();
   const [filters, setFilters] = useState({ status: '' });
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
@@ -13,7 +18,7 @@ function AssignedComplaints() {
   const [statusUpdate, setStatusUpdate] = useState('');
   const pageSize = 10;
   const { data, isLoading } = useAssignedComplaints({
-    onError: () => toast.error('Failed to load assigned complaints'),
+    onError: () => toast.error(t('officer.assigned.loadFailed')),
   });
   const updateStatus = useUpdateComplaintStatus();
 
@@ -33,7 +38,7 @@ function AssignedComplaints() {
 
   const handleUpdateStatus = async () => {
     if (!statusUpdate) {
-      toast.error('Please select a status');
+      toast.error(t('officer.assigned.selectStatus'));
       return;
     }
 
@@ -42,21 +47,11 @@ function AssignedComplaints() {
         complaintId: selectedComplaint.complaint_id,
         status: statusUpdate,
       });
-      toast.success('Status updated successfully');
+      toast.success(t('officer.assigned.updated'));
       setShowModal(false);
     } catch (error) {
-      toast.error('Failed to update status');
+      toast.error(t('officer.assigned.updateFailed'));
     }
-  };
-
-  const getStatusBadge = (status) => {
-    const variants = {
-      pending: 'warning',
-      in_progress: 'primary',
-      resolved: 'success',
-      rejected: 'danger',
-    };
-    return <Badge bg={variants[status] || 'secondary'}>{status.replace('_', ' ').toUpperCase()}</Badge>;
   };
 
   const paginatedComplaints = filteredComplaints.slice((currentPage - 1) * pageSize, currentPage * pageSize);
@@ -67,7 +62,7 @@ function AssignedComplaints() {
         <Col>
           <h2 className="fw-bold mb-2">
             <i className="fas fa-tasks me-2 text-primary"></i>
-            Assigned Complaints
+            {t('officer.assigned.title')}
           </h2>
         </Col>
       </Row>
@@ -75,31 +70,40 @@ function AssignedComplaints() {
       <Card className="border-0 shadow-lg mb-4">
         <Card.Body className="p-3">
           <Form.Group>
-            <Form.Label className="small fw-bold">Filter by Status</Form.Label>
+            <Form.Label className="small fw-bold">{t('common.filterByStatus')}</Form.Label>
             <Form.Select
               name="status"
               value={filters.status}
               onChange={handleFilterChange}
               size="sm"
             >
-              <option value="">All Status</option>
-              <option value="pending">Pending</option>
-              <option value="in_progress">In Progress</option>
-              <option value="resolved">Resolved</option>
+              <option value="">{t('common.allStatus')}</option>
+              <option value="pending">{t('status.pending')}</option>
+              <option value="in_progress">{t('status.in_progress')}</option>
+              <option value="resolved">{t('status.resolved')}</option>
             </Form.Select>
           </Form.Group>
         </Card.Body>
       </Card>
 
       {isLoading ? (
-        <div className="text-center py-5">
-          <Spinner animation="border" variant="primary" />
-        </div>
+        <LoadingState variant="table" label={t('officer.assigned.loading')} />
       ) : filteredComplaints.length === 0 ? (
         <Card className="border-0 shadow-sm">
-          <Card.Body className="text-center py-5">
-            <p className="text-muted">No complaints assigned to you yet</p>
-          </Card.Body>
+          {(data || []).length === 0 ? (
+            <EmptyState
+              icon="tasks"
+              title={t('officer.assigned.emptyTitle')}
+              text={t('officer.assigned.emptyText')}
+            />
+          ) : (
+            <EmptyState
+              icon="filter"
+              title={t('officer.assigned.filterEmptyTitle')}
+              text={t('officer.assigned.filterEmptyText')}
+              action={{ label: t('officer.assigned.clearFilter'), onClick: () => setFilters({ status: '' }), variant: 'outline-secondary' }}
+            />
+          )}
         </Card>
       ) : (
         <>
@@ -107,13 +111,13 @@ function AssignedComplaints() {
             <Table responsive className="mb-0">
               <thead className="table-primary">
                 <tr>
-                  <th>ID</th>
-                  <th>Title</th>
-                  <th>Category</th>
-                  <th>Status</th>
-                  <th>Citizen</th>
-                  <th>Assigned</th>
-                  <th>Action</th>
+                  <th>{t('common.id')}</th>
+                  <th>{t('common.title')}</th>
+                  <th>{t('common.category')}</th>
+                  <th>{t('common.status')}</th>
+                  <th>{t('officer.assigned.citizen')}</th>
+                  <th>{t('status.assigned')}</th>
+                  <th>{t('common.action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -121,11 +125,11 @@ function AssignedComplaints() {
                   <tr key={complaint.complaint_id}>
                     <td className="fw-bold">#{complaint.complaint_id}</td>
                     <td>{complaint.title}</td>
-                    <td className="text-capitalize">{formatComplaintCategory(complaint.category)}</td>
-                    <td>{getStatusBadge(complaint.status)}</td>
+                    <td className="text-capitalize">{categoryLabel(t, complaint.category)}</td>
+                    <td><StatusBadge status={complaint.status} /></td>
                     <td>{complaint.citizen_name}</td>
                     <td className="small text-muted">
-                      {new Date(complaint.assigned_at).toLocaleDateString()}
+                      {formatDate(complaint.assigned_at)}
                     </td>
                     <td>
                       <Button
@@ -137,7 +141,7 @@ function AssignedComplaints() {
                           setShowModal(true);
                         }}
                       >
-                        Update
+                        {t('officer.assigned.update')}
                       </Button>
                     </td>
                   </tr>
@@ -165,21 +169,23 @@ function AssignedComplaints() {
       {/* Status Update Modal */}
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
-          <Modal.Title>Update Complaint Status</Modal.Title>
+          <Modal.Title>{t('officer.assigned.modalTitle')}</Modal.Title>
         </Modal.Header>
         <Modal.Body>
           {selectedComplaint && (
             <>
               <p className="mb-3">
-                <strong>Complaint #{selectedComplaint.complaint_id}: {selectedComplaint.title}</strong>
+                <strong>
+                  {t('citizen.details.complaintNumber', { id: selectedComplaint.complaint_id })}: {selectedComplaint.title}
+                </strong>
               </p>
               <Form.Group>
-                <Form.Label>New Status</Form.Label>
+                <Form.Label>{t('officer.assigned.newStatus')}</Form.Label>
                 <Form.Select value={statusUpdate} onChange={(e) => setStatusUpdate(e.target.value)}>
-                  <option value="pending">Pending</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="rejected">Rejected</option>
+                  <option value="pending">{t('status.pending')}</option>
+                  <option value="in_progress">{t('status.in_progress')}</option>
+                  <option value="resolved">{t('status.resolved')}</option>
+                  <option value="rejected">{t('status.rejected')}</option>
                 </Form.Select>
               </Form.Group>
             </>
@@ -187,10 +193,10 @@ function AssignedComplaints() {
         </Modal.Body>
         <Modal.Footer>
           <Button variant="light" onClick={() => setShowModal(false)}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" onClick={handleUpdateStatus}>
-            Update Status
+            {t('officer.assigned.updateStatus')}
           </Button>
         </Modal.Footer>
       </Modal>

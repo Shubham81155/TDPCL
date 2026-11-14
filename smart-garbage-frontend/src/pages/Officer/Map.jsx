@@ -1,15 +1,25 @@
 // src/pages/Officer/Map.jsx
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Container, Alert, Card, Spinner, ListGroup } from 'react-bootstrap';
+import { Container, Alert, Card, Button, ListGroup } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
+import { loadLeaflet, TILE_URL, TILE_ATTRIBUTION } from '../../utils/leafletLoader';
+import { useTranslation } from '../../i18n/LanguageContext';
+import LoadingState from '../../components/common/LoadingState';
+import Skeleton from '../../components/common/Skeleton';
 
 const ACTIVE_COMPLAINT_STATUSES = new Set(['new', 'assigned', 'pending', 'in_progress']);
 
 function OfficerMap() {
+  const { t } = useTranslation();
+  // The load effect runs once on mount; read t through a ref so it never re-fetches on a language switch.
+  const tRef = useRef(t);
+  tRef.current = t;
   const [complaints, setComplaints] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [mapReady, setMapReady] = useState(false);
+  const [leaflet, setLeaflet] = useState(null);
+  const [mapError, setMapError] = useState(false);
+  const [mapAttempt, setMapAttempt] = useState(0);
   const [selectedComplaintId, setSelectedComplaintId] = useState(null);
   const mapInstanceRef = useRef(null);
   const mapElementRef = useRef(null);
@@ -21,7 +31,7 @@ function OfficerMap() {
         const response = await apiClient.get('/complaints/officer/assigned');
         setComplaints(response.data.data || []);
       } catch (error) {
-        toast.error('Failed to load map data');
+        toast.error(tRef.current('officer.map.loadFailed'));
       } finally {
         setIsLoading(false);
       }
@@ -45,35 +55,22 @@ function OfficerMap() {
   }, [complaints]);
 
   useEffect(() => {
-    const leafletCssId = 'leaflet-css';
-    if (!document.getElementById(leafletCssId)) {
-      const link = document.createElement('link');
-      link.id = leafletCssId;
-      link.rel = 'stylesheet';
-      link.href = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css';
-      document.head.appendChild(link);
-    }
-
-    if (window.L) {
-      setMapReady(true);
-      return;
-    }
-
-    const script = document.createElement('script');
-    script.src = 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js';
-    script.async = true;
-    script.onload = () => setMapReady(true);
-    script.onerror = () => toast.error('Failed to load map library');
-    document.body.appendChild(script);
-
+    let cancelled = false;
+    setMapError(false);
+    loadLeaflet()
+      .then((L) => {
+        if (!cancelled) setLeaflet(L);
+      })
+      .catch(() => {
+        if (!cancelled) setMapError(true);
+      });
     return () => {
-      script.onload = null;
-      script.onerror = null;
+      cancelled = true;
     };
-  }, []);
+  }, [mapAttempt]);
 
   useEffect(() => {
-    if (!mapReady || !mapElementRef.current || !validLocations.length || !window.L) {
+    if (!leaflet || !mapElementRef.current || !validLocations.length) {
       return;
     }
 
@@ -82,17 +79,15 @@ function OfficerMap() {
       mapInstanceRef.current = null;
     }
 
-    const map = window.L.map(mapElementRef.current);
+    const map = leaflet.map(mapElementRef.current);
     mapInstanceRef.current = map;
     markerRefs.current = new Map();
 
-    window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      attribution: '&copy; OpenStreetMap contributors',
-    }).addTo(map);
+    leaflet.tileLayer(TILE_URL, { attribution: TILE_ATTRIBUTION }).addTo(map);
 
     const markerBounds = [];
     validLocations.forEach((complaint) => {
-      const marker = window.L.marker([complaint.latitude, complaint.longitude]).addTo(map);
+      const marker = leaflet.marker([complaint.latitude, complaint.longitude]).addTo(map);
       marker.bindPopup(`#${complaint.complaint_id} - ${complaint.title}`);
       marker.on('click', () => setSelectedComplaintId(complaint.complaint_id));
       markerRefs.current.set(complaint.complaint_id, marker);
@@ -112,7 +107,7 @@ function OfficerMap() {
       }
       markerRefs.current = new Map();
     };
-  }, [mapReady, validLocations]);
+  }, [leaflet, validLocations]);
 
   const focusComplaintOnMap = (complaint) => {
     const map = mapInstanceRef.current;
@@ -129,43 +124,59 @@ function OfficerMap() {
 
   const formatCoordinate = (value) => {
     const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric.toFixed(4) : 'N/A';
+    return Number.isFinite(numeric) ? numeric.toFixed(4) : t('common.na');
   };
 
   return (
     <Container className="py-4">
       <h2 className="fw-bold mb-4">
         <i className="fas fa-map-marked-alt me-2 text-primary"></i>
-        Complaints Map
+        {t('officer.map.title')}
       </h2>
 
       {isLoading ? (
-        <div className="text-center py-5">
-          <Spinner animation="border" variant="primary" />
-        </div>
+        <LoadingState variant="table" label={t('officer.map.loading')} />
       ) : validLocations.length === 0 ? (
         <Alert variant="info">
           <i className="fas fa-info-circle me-2"></i>
-          No complaint locations available to display on map.
+          {t('officer.map.noLocations')}
         </Alert>
       ) : (
         <>
           <Alert variant="info">
             <i className="fas fa-map me-2"></i>
-            Only current unresolved complaints are pinned on this map.
+            {t('officer.map.onlyUnresolved')}
           </Alert>
 
           <Card className="border-0 shadow-sm mb-3">
             <Card.Body className="p-2">
-              <div
-                ref={mapElementRef}
-                style={{ width: '100%', height: '500px', borderRadius: '6px' }}
-              />
+              {mapError ? (
+                <div className="text-center py-5" role="alert">
+                  <i className="fas fa-map-marked-alt fa-2x text-muted mb-2 d-block" aria-hidden="true"></i>
+                  <p className="fw-bold mb-1">{t('common.mapCouldNotLoad')}</p>
+                  <p className="text-muted small">{t('officer.map.libError')}</p>
+                  <Button variant="outline-primary" size="sm" onClick={() => setMapAttempt((n) => n + 1)}>
+                    <i className="fas fa-redo me-1" aria-hidden="true"></i>{t('common.retry')}
+                  </Button>
+                </div>
+              ) : (
+                <div style={{ position: 'relative' }}>
+                  <div
+                    ref={mapElementRef}
+                    style={{ width: '100%', height: '500px', borderRadius: '6px' }}
+                  />
+                  {!leaflet && (
+                    <div style={{ position: 'absolute', inset: 0 }} className="p-3">
+                      <Skeleton variant="card" lines={8} label={t('officer.map.loadingMap')} />
+                    </div>
+                  )}
+                </div>
+              )}
             </Card.Body>
           </Card>
 
           <Card className="border-0 shadow-sm">
-            <Card.Header className="bg-light fw-bold">Current Issues Coordinates</Card.Header>
+            <Card.Header className="fw-bold">{t('officer.map.coordsTitle')}</Card.Header>
             <ListGroup variant="flush">
               {validLocations.map((complaint) => (
                 <ListGroup.Item

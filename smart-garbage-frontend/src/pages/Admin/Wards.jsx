@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { Container, Row, Col, Card, Table, Alert, Form, Button, Modal } from 'react-bootstrap';
 import { useWards, useSaveWard } from '../../hooks/useWards';
+import EmptyState from '../../components/common/EmptyState';
 import LoadingState from '../../components/common/LoadingState';
 import toast from 'react-hot-toast';
 
@@ -182,11 +183,21 @@ function AdminWards() {
             onChange={(e) => setQuery(e.target.value)}
           />
           {isLoading ? (
-            <LoadingState label="Loading wards" variant="primary" />
+            <LoadingState label="Loading wards" variant="table" />
           ) : filtered.length === 0 ? (
-            <Alert variant="info" className="mb-0">
-              No wards found.
-            </Alert>
+            wards.length === 0 ? (
+              <EmptyState
+                icon="map"
+                title="No wards yet"
+                text="Wards group complaints and officers by area. Add your first ward to get started."
+                action={{ label: 'Add your first ward', onClick: openCreate, icon: 'plus' }}
+                className="py-4"
+              />
+            ) : (
+              <Alert variant="info" className="mb-0">
+                No wards found.
+              </Alert>
+            )
           ) : (
             <div className="table-responsive">
               <Table hover className="align-middle">

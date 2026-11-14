@@ -1,12 +1,16 @@
 // src/pages/Citizen/ComplaintDetails.jsx
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Badge, Button, Spinner, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Badge, Button, Alert } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
-import { formatComplaintCategory } from '../../utils/classificationUtils';
+import LoadingState from '../../components/common/LoadingState';
+import StatusBadge, { UrgencyBadge, STATUS_ICONS } from '../../components/common/StatusBadge';
+import { useTranslation } from '../../i18n/LanguageContext';
+import { categoryLabel, statusLabel } from '../../i18n/labels';
 
 function ComplaintDetails() {
+  const { t, formatDateTime } = useTranslation();
   const { id } = useParams();
   const navigate = useNavigate();
   const [complaint, setComplaint] = useState(null);
@@ -25,7 +29,7 @@ function ComplaintDetails() {
       const response = await apiClient.get(`/complaints/${id}`);
       setComplaint(response.data.complaint);
     } catch (error) {
-      toast.error('Failed to load complaint details');
+      toast.error(t('citizen.details.loadFailed'));
       navigate('/citizen/complaints');
     } finally {
       setIsLoading(false);
@@ -41,36 +45,15 @@ function ComplaintDetails() {
     }
   };
 
-  const getStatusBadge = (status) => {
-    const variants = {
-      new: 'primary',
-      assigned: 'info',
-      pending: 'warning',
-      in_progress: 'primary',
-      resolved: 'success',
-      rejected: 'danger',
-    };
-    return <Badge bg={variants[status] || 'secondary'}>{status.replace('_', ' ').toUpperCase()}</Badge>;
-  };
-
-  const getUrgencyBadge = (urgency) => {
-    const variants = {
-      low: 'success',
-      medium: 'warning',
-      high: 'danger',
-    };
-    return <Badge bg={variants[urgency] || 'secondary'}>{urgency.toUpperCase()}</Badge>;
-  };
-
   const formatCoordinate = (value) => {
     const numeric = Number(value);
-    return Number.isFinite(numeric) ? numeric.toFixed(4) : 'N/A';
+    return Number.isFinite(numeric) ? numeric.toFixed(4) : t('common.na');
   };
 
   if (isLoading) {
     return (
-      <Container className="py-5 text-center">
-        <Spinner animation="border" variant="success" />
+      <Container className="py-4">
+        <LoadingState variant="detail" label={t('citizen.details.loading')} />
       </Container>
     );
   }
@@ -80,9 +63,9 @@ function ComplaintDetails() {
       <Container className="py-5">
         <Alert variant="danger">
           <i className="fas fa-exclamation-triangle me-2"></i>
-          Complaint not found
+          {t('citizen.details.notFound')}
         </Alert>
-        <Button onClick={() => navigate('/citizen/complaints')}>Back to Complaints</Button>
+        <Button onClick={() => navigate('/citizen/complaints')}>{t('citizen.details.back')}</Button>
       </Container>
     );
   }
@@ -95,7 +78,7 @@ function ComplaintDetails() {
         onClick={() => navigate('/citizen/complaints')}
       >
         <i className="fas fa-arrow-left me-2"></i>
-        Back to Complaints
+        {t('citizen.details.back')}
       </Button>
 
       <Row>
@@ -103,9 +86,9 @@ function ComplaintDetails() {
           <Card className="border-0 shadow-lg mb-4">
             <Card.Header className="bg-success text-white d-flex justify-content-between align-items-center">
               <Card.Title className="mb-0">
-                Complaint #{complaint.complaint_id}
+                {t('citizen.details.complaintNumber', { id: complaint.complaint_id })}
               </Card.Title>
-              {getStatusBadge(complaint.status)}
+              <StatusBadge status={complaint.status} />
             </Card.Header>
 
             <Card.Body>
@@ -115,29 +98,29 @@ function ComplaintDetails() {
               <Row className="mb-4">
                 <Col md={6}>
                   <p className="mb-2">
-                    <strong>Category:</strong> {formatComplaintCategory(complaint.category)}
+                    <strong>{t('citizen.details.category')}</strong> {categoryLabel(t, complaint.category)}
                   </p>
                   <p className="mb-2">
-                    <strong>Urgency:</strong> {getUrgencyBadge(complaint.urgency_level)}
+                    <strong>{t('citizen.details.urgency')}</strong> <UrgencyBadge urgency={complaint.urgency_level} />
                   </p>
                   <p className="mb-2">
-                    <strong>Location:</strong> {formatCoordinate(complaint.latitude)}, {formatCoordinate(complaint.longitude)}
+                    <strong>{t('citizen.details.location')}</strong> {formatCoordinate(complaint.latitude)}, {formatCoordinate(complaint.longitude)}
                   </p>
                 </Col>
                 <Col md={6}>
                   <p className="mb-2">
-                    <strong>Submitted:</strong>{' '}
-                    {new Date(complaint.created_at).toLocaleString()}
+                    <strong>{t('citizen.details.submitted')}</strong>{' '}
+                    {formatDateTime(complaint.created_at)}
                   </p>
                   {complaint.assigned_at && (
                     <p className="mb-2">
-                      <strong>Assigned:</strong>{' '}
-                      {new Date(complaint.assigned_at).toLocaleString()}
+                      <strong>{t('citizen.details.assigned')}</strong>{' '}
+                      {formatDateTime(complaint.assigned_at)}
                     </p>
                   )}
                   {complaint.assigned_officer_id && (
                     <p className="mb-0">
-                      <strong>Assigned Officer:</strong> {complaint.assigned_officer || 'N/A'}
+                      <strong>{t('citizen.details.assignedOfficer')}</strong> {complaint.assigned_officer || t('common.na')}
                     </p>
                   )}
                 </Col>
@@ -145,15 +128,15 @@ function ComplaintDetails() {
 
               {complaint.image_path && (
                 <div className="mb-4">
-                  <p className="fw-bold mb-2">Issue Photo:</p>
+                  <p className="fw-bold mb-2">{t('citizen.details.issuePhoto')}</p>
                   <img
                     src={complaint.image_path}
-                    alt="Complaint"
+                    alt={t('citizen.details.photoAlt')}
                     style={{
                       maxWidth: '100%',
                       maxHeight: '400px',
                       borderRadius: '5px',
-                      border: '1px solid #ddd',
+                      border: '1px solid var(--bs-border-color)',
                     }}
                   />
                 </div>
@@ -165,29 +148,28 @@ function ComplaintDetails() {
         <Col lg={4}>
           <Card className="border-0 shadow-lg sticky-top" style={{ top: '20px' }}>
             <Card.Header className="bg-info text-white">
-              <Card.Title className="mb-0">Status Information</Card.Title>
+              <Card.Title className="mb-0">{t('citizen.details.statusInfo')}</Card.Title>
             </Card.Header>
 
             <Card.Body>
               <div className="mb-4 text-center">
                 <div className="mb-2">
                   <i
-                    className={`fas text-${
-                      complaint.status === 'resolved' ? 'success' : 'info'
+                    className={`${STATUS_ICONS[complaint.status] || STATUS_ICONS.unknown} text-${
+                      complaint.status === 'resolved' ? 'success' : complaint.status === 'rejected' ? 'danger' : 'info'
                     }`}
                     style={{ fontSize: '3rem' }}
-                  >
-                    {complaint.status === 'resolved' ? '✓' : '○'}
-                  </i>
+                    aria-hidden="true"
+                  ></i>
                 </div>
-                <h5 className="fw-bold">{complaint.status.replace('_', ' ').toUpperCase()}</h5>
+                <h5 className="fw-bold text-capitalize">{statusLabel(t, complaint.status)}</h5>
               </div>
 
               <hr />
 
               <div className="small">
                 <p>
-                  <strong>Status Progress:</strong>
+                  <strong>{t('citizen.details.statusProgress')}</strong>
                 </p>
                 <div className="progress mb-3">
                   <div
@@ -217,12 +199,12 @@ function ComplaintDetails() {
 
                 <div className="mb-3">
                   <p className="mb-1">
-                    <i className="fas fa-check-circle text-success me-2"></i>
-                    Reported
+                    <i className="fa-solid fa-circle-check text-success me-2" aria-hidden="true"></i>
+                    {t('citizen.details.reported')}
                   </p>
                   <p className={`mb-1 ${complaint.status !== 'new' ? 'text-success' : 'text-muted'}`}>
-                    <i className={`fas me-2 ${complaint.status !== 'new' ? 'fa-check-circle text-success' : 'fa-circle'}`}></i>
-                    Assigned
+                    <i className={`fa-solid me-2 ${complaint.status !== 'new' ? 'fa-circle-check text-success' : 'fa-regular fa-circle'}`} aria-hidden="true"></i>
+                    {t('status.assigned')}
                   </p>
                   <p
                     className={`mb-1 ${
@@ -232,25 +214,25 @@ function ComplaintDetails() {
                     }`}
                   >
                     <i
-                      className={`fas me-2 ${
+                      className={`fa-solid me-2 ${
                         complaint.status === 'in_progress' || complaint.status === 'resolved'
-                          ? 'fa-check-circle text-success'
-                          : 'fa-circle'
+                          ? 'fa-circle-check text-success'
+                          : 'fa-regular fa-circle'
                       }`}
-                    ></i>
-                    In Progress
+                    aria-hidden="true"></i>
+                    {t('status.in_progress')}
                   </p>
                   <p
                     className={complaint.status === 'resolved' ? 'text-success' : 'text-muted'}
                   >
                     <i
-                      className={`fas me-2 ${
+                      className={`fa-solid me-2 ${
                         complaint.status === 'resolved'
-                          ? 'fa-check-circle text-success'
-                          : 'fa-circle'
+                          ? 'fa-circle-check text-success'
+                          : 'fa-regular fa-circle'
                       }`}
-                    ></i>
-                    Resolved
+                    aria-hidden="true"></i>
+                    {t('status.resolved')}
                   </p>
                 </div>
               </div>
@@ -258,14 +240,14 @@ function ComplaintDetails() {
               {complaint.status !== 'resolved' && (
                 <Alert variant="info" className="mt-3 small mb-0">
                   <i className="fas fa-info-circle me-2"></i>
-                  Your issue is being processed. You will receive updates by email.
+                  {t('citizen.details.processing')}
                 </Alert>
               )}
 
               {complaint.status === 'resolved' && (
                 <Alert variant="success" className="mt-3 small mb-0">
                   <i className="fas fa-check-circle me-2"></i>
-                  Thank you! Your complaint has been successfully resolved.
+                  {t('citizen.details.thanks')}
                 </Alert>
               )}
             </Card.Body>
@@ -278,7 +260,7 @@ function ComplaintDetails() {
           <Col>
             <Card className="border-0 shadow-lg">
               <Card.Header className="bg-success text-white">
-                <Card.Title className="mb-0">Activity Timeline</Card.Title>
+                <Card.Title className="mb-0">{t('citizen.details.timeline')}</Card.Title>
               </Card.Header>
 
               <Card.Body>
@@ -293,10 +275,10 @@ function ComplaintDetails() {
                         </div>
                         <div className="flex-grow-1 ms-3">
                           <p className="mb-1 fw-bold">
-                            {event.new_status.replace('_', ' ').toUpperCase()}
+                            <StatusBadge status={event.new_status} />
                           </p>
                           <small className="text-muted d-block mb-1">
-                            {new Date(event.created_at).toLocaleString()}
+                            {formatDateTime(event.created_at)}
                           </small>
                           {event.comment && (
                             <p className="mb-0 small">{event.comment}</p>

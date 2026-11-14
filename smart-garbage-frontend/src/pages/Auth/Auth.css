@@ -17,31 +17,31 @@
 
 .auth-card .form-label {
   font-weight: 600;
-  color: #333;
+  color: var(--bs-body-color);
   margin-bottom: 0.5rem;
 }
 
 .auth-card .form-control {
   border-radius: 5px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--bs-border-color);
   padding: 0.75rem;
   font-size: 0.95rem;
 }
 
 .auth-card .form-control:focus {
-  border-color: #28a745;
-  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+  border-color: var(--focus-ring, #28a745);
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.35);
 }
 
 .auth-card .form-select {
   border-radius: 5px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--bs-border-color);
   padding: 0.75rem;
 }
 
 .auth-card .form-select:focus {
-  border-color: #28a745;
-  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.25);
+  border-color: var(--focus-ring, #28a745);
+  box-shadow: 0 0 0 0.2rem rgba(40, 167, 69, 0.35);
 }
 
 .auth-card .btn {
@@ -71,8 +71,9 @@
 
 .auth-card hr {
   margin: 2rem 0;
-  border-color: #ddd;
+  border-color: var(--bs-border-color);
 }
 
-.auth-card { box-shadow: 0 10px 30px rgba(30, 126, 52, 0.12) !important; }
+.auth-card { box-shadow: 0 10px 30px rgba(30, 126, 52, 0.12) !important; background-color: var(--auth-card-bg, #fff); color: var(--bs-body-color); }
+.auth-card a:not(.btn) { color: var(--link-strong); }
 

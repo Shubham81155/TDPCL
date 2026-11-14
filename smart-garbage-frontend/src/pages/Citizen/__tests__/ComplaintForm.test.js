@@ -13,6 +13,17 @@ jest.mock('../../../utils/locationUtils', () => ({
   __esModule: true,
   getCurrentLocation: jest.fn(),
 }));
+jest.mock('../../../components/common/MapPicker', () => ({
+  __esModule: true,
+  default: ({ value, onChange }) => (
+    <div>
+      <button type="button" onClick={() => onChange({ lat: 12.5, lng: 77.25 })}>
+        fake-tap-map
+      </button>
+      <span data-testid="pin">{value ? `${value.lat},${value.lng}` : 'none'}</span>
+    </div>
+  ),
+}));
 jest.mock('react-hot-toast', () => ({
   __esModule: true,
   default: { success: jest.fn(), error: jest.fn() },
@@ -54,6 +65,46 @@ describe('ComplaintForm', () => {
     const { container } = renderForm();
     await waitFor(() => expect(field(container, 'input[name="latitude"]')).toHaveValue(19.076));
     expect(field(container, 'input[name="longitude"]')).toHaveValue(72.8777);
+  });
+
+  it('puts the photo first and keeps manual coordinates in a collapsed details', async () => {
+    const { container } = renderForm();
+    expect(await screen.findByText(/take \/ choose a photo/i)).toBeInTheDocument();
+    const details = field(container, 'details');
+    expect(details).not.toHaveAttribute('open');
+    expect(details).toContainElement(field(container, 'input[name="latitude"]'));
+    const photo = screen.getByText(/^Photo of Issue/);
+    const location = screen.getByText('Location *');
+    expect(photo.compareDocumentPosition(location) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('moving the pin updates the coordinate inputs and typing updates the pin', async () => {
+    getCurrentLocation.mockRejectedValue(new Error('denied'));
+    const { container } = renderForm();
+    expect(screen.getByTestId('pin')).toHaveTextContent('none');
+    fireEvent.click(screen.getByText('fake-tap-map'));
+    expect(field(container, 'input[name="latitude"]')).toHaveValue(12.5);
+    expect(field(container, 'input[name="longitude"]')).toHaveValue(77.25);
+    fireEvent.change(field(container, 'input[name="latitude"]'), { target: { value: '10.25' } });
+    expect(screen.getByTestId('pin')).toHaveTextContent('10.25,77.25');
+  });
+
+  it('requires a location and focuses the first invalid field', async () => {
+    getCurrentLocation.mockRejectedValue(new Error('denied'));
+    renderForm();
+    fireEvent.click(await screen.findByRole('button', { name: /submit complaint/i }));
+    expect(await screen.findByText(/choose the location on the map/i)).toBeInTheDocument();
+    expect(screen.getByText(/image is required/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /take \/ choose a photo/i })).toHaveFocus();
+    expect(apiClient.post).not.toHaveBeenCalled();
+  });
+
+  it('shows a Retake action after a photo is chosen', async () => {
+    const { container } = renderForm();
+    await screen.findByText(/photo of issue/i);
+    fireEvent.change(field(container, 'input[type="file"]'), { target: { files: [makeImage()] } });
+    expect(await screen.findByRole('button', { name: /retake/i })).toBeInTheDocument();
+    expect(screen.getByAltText(/preview/i)).toBeInTheDocument();
   });
 
   it('asks for category and photo before submitting', async () => {

@@ -3,6 +3,8 @@ import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './context/AuthContext';
+import { ThemeProvider } from './context/ThemeContext';
+import { LanguageProvider, useTranslation } from './i18n/LanguageContext';
 
 // Layout Components
 import Header from './components/Layout/Header';
@@ -35,19 +37,21 @@ const AdminComplaints = lazy(() => import('./pages/Admin/Complaints'));
 const AdminOfficers = lazy(() => import('./pages/Admin/Officers'));
 const AdminWards = lazy(() => import('./pages/Admin/Wards'));
 const AdminAnalytics = lazy(() => import('./pages/Admin/Analytics'));
+const AdminMap = lazy(() => import('./pages/Admin/ComplaintsMap'));
 const AdminReports = lazy(() => import('./pages/Admin/Reports'));
 
 // 404 Page
 const NotFound = lazy(() => import('./pages/NotFound'));
 
-function App() {
+function AppContent() {
   const { isLoading } = useAuth();
+  const { t } = useTranslation();
 
   if (isLoading) {
     return (
       <div className="d-flex justify-content-center align-items-center" style={{ minHeight: '100vh' }}>
         <div className="spinner-border text-primary" role="status">
-          <span className="visually-hidden">Loading...</span>
+          <span className="visually-hidden">{t('common.loadingDots')}</span>
         </div>
       </div>
     );
@@ -56,14 +60,19 @@ function App() {
   return (
     <Router>
       <a href="#main-content" className="skip-link visually-hidden-focusable">
-        Skip to main content
+        {t('common.skipToContent')}
       </a>
-      <Toaster position="top-right" />
+      <Toaster
+        position="bottom-center"
+        gutter={8}
+        containerStyle={{ bottom: 80 }}
+        toastOptions={{ duration: 4000, className: 'app-toast' }}
+      />
       <div className="d-flex flex-column min-vh-100">
         <Header />
         <main id="main-content" tabIndex={-1} className="flex-grow-1 py-4">
           <ErrorBoundary>
-          <Suspense fallback={<LoadingState label="Loading page" fullPage />}>
+          <Suspense fallback={<LoadingState label={t('common.loadingPage')} fullPage />}>
           <Routes>
             {/* Auth Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -173,6 +182,14 @@ function App() {
               }
             />
             <Route
+              path="/admin/map"
+              element={
+                <ProtectedRoute requiredRole="admin">
+                  <AdminMap />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/admin/analytics"
               element={
                 <ProtectedRoute requiredRole="admin">
@@ -199,6 +216,16 @@ function App() {
         <Footer />
       </div>
     </Router>
+  );
+}
+
+function App() {
+  return (
+    <ThemeProvider>
+      <LanguageProvider>
+        <AppContent />
+      </LanguageProvider>
+    </ThemeProvider>
   );
 }
 

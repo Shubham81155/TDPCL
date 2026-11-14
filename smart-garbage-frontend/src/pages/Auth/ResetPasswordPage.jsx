@@ -4,9 +4,11 @@ import { Container, Form, Button, Card, Alert } from 'react-bootstrap';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import apiClient from '../../services/api';
+import { useTranslation } from '../../i18n/LanguageContext';
 import './Auth.css';
 
 function ResetPasswordPage() {
+  const { t } = useTranslation();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const token = searchParams.get('token');
@@ -22,26 +24,27 @@ function ResetPasswordPage() {
     setError('');
 
     if (password.length < 6) {
-      setError('Password must be at least 6 characters');
+      setError(t('auth.errors.passwordTooShort'));
       return;
     }
     if (password !== confirm) {
-      setError('Passwords do not match');
+      setError(t('auth.reset.mismatch'));
       return;
     }
 
     setIsLoading(true);
     try {
       await apiClient.post('/auth/reset-password', { token, newPassword: password });
-      toast.success('Password reset successfully. Please log in.');
+      toast.success(t('auth.reset.success'));
       navigate('/login', { replace: true });
     } catch (err) {
       if (err.response?.status === 429) {
-        setError('Too many attempts. Please try again later.');
+        setError(t('auth.reset.tooMany'));
       } else if (err.response?.status === 400 && /token/i.test(err.response?.data?.error || '')) {
         setTokenInvalid(true);
       } else {
-        setError(err.response?.data?.error || 'Failed to reset password. Please try again.');
+        // server messages are shown as returned (English)
+        setError(err.response?.data?.error || t('auth.reset.failed'));
       }
     } finally {
       setIsLoading(false);
@@ -56,15 +59,15 @@ function ResetPasswordPage() {
         <Card.Body className="p-5">
           <div className="text-center mb-4">
             <i className="fas fa-key text-warning" style={{ fontSize: '3rem' }}></i>
-            <h2 className="mt-3 fw-bold">Choose a New Password</h2>
+            <h2 className="mt-3 fw-bold">{t('auth.reset.title')}</h2>
           </div>
 
           {showInvalid ? (
             <Alert variant="danger" className="text-center">
-              <h5 className="mb-3">Invalid or expired link</h5>
-              <p>This password reset link is invalid, has expired, or was already used.</p>
+              <h5 className="mb-3">{t('auth.reset.invalidTitle')}</h5>
+              <p>{t('auth.reset.invalidText')}</p>
               <Link to="/forgot-password" className="btn btn-warning fw-bold">
-                Request a new link
+                {t('auth.reset.requestNew')}
               </Link>
             </Alert>
           ) : (
@@ -72,20 +75,20 @@ function ResetPasswordPage() {
               {error && <Alert variant="danger">{error}</Alert>}
               <Form onSubmit={handleSubmit}>
                 <Form.Group className="mb-3">
-                  <Form.Label>New Password</Form.Label>
+                  <Form.Label>{t('auth.reset.newPassword')}</Form.Label>
                   <Form.Control
                     type="password"
-                    placeholder="At least 6 characters"
+                    placeholder={t('auth.reset.newPasswordPlaceholder')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     autoComplete="new-password"
                   />
                 </Form.Group>
                 <Form.Group className="mb-4">
-                  <Form.Label>Confirm Password</Form.Label>
+                  <Form.Label>{t('auth.reset.confirm')}</Form.Label>
                   <Form.Control
                     type="password"
-                    placeholder="Re-enter your password"
+                    placeholder={t('auth.reset.confirmPlaceholder')}
                     value={confirm}
                     onChange={(e) => setConfirm(e.target.value)}
                     autoComplete="new-password"
@@ -97,7 +100,7 @@ function ResetPasswordPage() {
                   className="w-100 py-2 fw-bold"
                   disabled={isLoading}
                 >
-                  {isLoading ? 'Resetting...' : 'Reset Password'}
+                  {isLoading ? t('auth.reset.submitting') : t('auth.reset.submit')}
                 </Button>
               </Form>
             </>
@@ -107,7 +110,7 @@ function ResetPasswordPage() {
           <div className="text-center">
             <p className="small text-muted">
               <Link to="/login" className="text-success fw-bold">
-                Back to login
+                {t('auth.reset.back')}
               </Link>
             </p>
           </div>

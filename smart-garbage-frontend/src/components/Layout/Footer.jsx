@@ -1,94 +1,62 @@
 // src/components/Layout/Footer.jsx
+//
+// Optional configuration (set in .env / build environment; nothing is shown when unset):
+//   REACT_APP_SUPPORT_EMAIL     support e-mail address, rendered as a mailto: link
+//   REACT_APP_SUPPORT_PHONE     support phone number, rendered as a tel: link
+//   REACT_APP_SOCIAL_FACEBOOK   full URL of the Facebook page
+//   REACT_APP_SOCIAL_TWITTER    full URL of the Twitter/X profile
+//   REACT_APP_SOCIAL_INSTAGRAM  full URL of the Instagram profile
+//   REACT_APP_SOCIAL_LINKEDIN   full URL of the LinkedIn page
 import React from 'react';
-import { Container, Row, Col } from 'react-bootstrap';
+import { Container } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
+import { useTranslation } from '../../i18n/LanguageContext';
 import './Footer.css';
 
 function Footer() {
+  const { t } = useTranslation();
   const currentYear = new Date().getFullYear();
+  const email = (process.env.REACT_APP_SUPPORT_EMAIL || '').trim();
+  const phone = (process.env.REACT_APP_SUPPORT_PHONE || '').trim();
+  const socials = [
+    { key: 'facebook', label: 'Facebook', icon: 'fa-facebook-f', url: process.env.REACT_APP_SOCIAL_FACEBOOK },
+    { key: 'twitter', label: 'Twitter', icon: 'fa-twitter', url: process.env.REACT_APP_SOCIAL_TWITTER },
+    { key: 'instagram', label: 'Instagram', icon: 'fa-instagram', url: process.env.REACT_APP_SOCIAL_INSTAGRAM },
+    { key: 'linkedin', label: 'LinkedIn', icon: 'fa-linkedin-in', url: process.env.REACT_APP_SOCIAL_LINKEDIN },
+  ]
+    .map((s) => ({ ...s, url: (s.url || '').trim() }))
+    .filter((s) => s.url);
 
   return (
-    <footer className="footer mt-auto py-3 bg-dark text-white">
+    <footer className="footer app-footer mt-auto py-3">
       <Container>
-        <Row>
-          <Col md={3} sm={6} className="mb-3">
-            <h6 className="fw-bold mb-2">
-              <i className="fas fa-trash me-2"></i>
-              About System
-            </h6>
-            <p className="small">
-              Smart Garbage Reporting & Municipality Automation System for efficient waste management.
-            </p>
-          </Col>
-
-          <Col md={3} sm={6} className="mb-3">
-            <h6 className="fw-bold mb-2">Quick Links</h6>
-            <ul className="list-unstyled small">
-              <li>
-                <Link to="/" className="text-decoration-none text-light">
-                  Home
-                </Link>
-              </li>
-              <li>
-                <span className="text-decoration-none text-light">
-                  About
-                </span>
-              </li>
-              <li>
-                <span className="text-decoration-none text-light">
-                  Contact
-                </span>
-              </li>
-            </ul>
-          </Col>
-
-          <Col md={3} sm={6} className="mb-3">
-            <h6 className="fw-bold mb-2">Contact</h6>
-            <p className="small">
-              <i className="fas fa-phone me-2"></i>
-              +91 1234567890
-              <br />
-              <i className="fas fa-envelope me-2"></i>
-              support@smartgarbage.in
-            </p>
-          </Col>
-
-          <Col md={3} sm={6} className="mb-3">
-            <h6 className="fw-bold mb-2">Follow Us</h6>
-            <div>
-              <span className="text-light me-3">
-                <i className="fab fa-facebook-f"></i>
-              </span>
-              <span className="text-light me-3">
-                <i className="fab fa-twitter"></i>
-              </span>
-              <span className="text-light me-3">
-                <i className="fab fa-instagram"></i>
-              </span>
-              <span className="text-light">
-                <i className="fab fa-linkedin-in"></i>
-              </span>
-            </div>
-          </Col>
-        </Row>
-
-        <hr className="bg-secondary" />
-
-        <Row>
-          <Col className="text-center small">
-            <p>
-              &copy; {currentYear} Smart Garbage System. All rights reserved.
-              <br />
-              <span className="text-decoration-none text-light">
-                Privacy Policy
-              </span>
-              |
-              <span className="text-decoration-none text-light ms-2">
-                Terms of Service
-              </span>
-            </p>
-          </Col>
-        </Row>
+        <div className="footer-row">
+          <p className="footer-desc mb-0">
+            <i className="fas fa-recycle me-2" aria-hidden="true"></i>
+            {t('footer.description')}
+          </p>
+          <nav aria-label={t('footer.navLabel')} className="footer-links">
+            <Link to="/">{t('footer.home')}</Link>
+            {email && (
+              <a href={`mailto:${email}`}>
+                <i className="fas fa-envelope me-1" aria-hidden="true"></i>
+                {email}
+              </a>
+            )}
+            {phone && (
+              <a href={`tel:${phone.replace(/[^\d+]/g, '')}`}>
+                <i className="fas fa-phone me-1" aria-hidden="true"></i>
+                {phone}
+              </a>
+            )}
+            {socials.map((s) => (
+              <a key={s.key} href={s.url} target="_blank" rel="noopener noreferrer" aria-label={s.label} title={s.label}>
+                <i className={`fab ${s.icon}`} aria-hidden="true"></i>
+              </a>
+            ))}
+          </nav>
+        </div>
+        <p className="footer-copy small mb-0">{t('footer.copyright', { year: currentYear })}</p>
       </Container>
     </footer>
   );

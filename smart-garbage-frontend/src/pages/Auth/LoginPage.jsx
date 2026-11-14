@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
+import { useTranslation } from '../../i18n/LanguageContext';
 import './Auth.css';
 
 function LoginPage() {
@@ -15,13 +16,15 @@ function LoginPage() {
   const [generalError, setGeneralError] = useState('');
 
   const { login } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const validateForm = () => {
     const newErrors = {};
-    if (!email) newErrors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'Email is invalid';
-    if (!password) newErrors.password = 'Password is required';
+    // Errors hold catalog keys and are translated at render, so they follow a language switch.
+    if (!email) newErrors.email = 'auth.errors.emailRequired';
+    else if (!/\S+@\S+\.\S+/.test(email)) newErrors.email = 'auth.errors.emailInvalid';
+    if (!password) newErrors.password = 'auth.errors.passwordRequired';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -43,10 +46,10 @@ function LoginPage() {
         refreshToken
       );
 
-      toast.success('Login successful!');
+      toast.success(t('auth.login.success'));
       navigate(role === 'admin' ? '/admin/dashboard' : role === 'officer' ? '/officer/dashboard' : '/citizen/dashboard');
     } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Login failed. Please check your credentials.';
+      const errorMsg = error.response?.data?.error || t('auth.login.failed'); // server messages are shown as returned (English)
       setGeneralError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -60,39 +63,39 @@ function LoginPage() {
         <Card.Body className="p-5">
           <div className="text-center mb-4">
             <i className="fas fa-trash text-success" style={{ fontSize: '3rem' }}></i>
-            <h2 className="mt-3 fw-bold">Smart Garbage System</h2>
-            <p className="text-muted">Login to your account</p>
+            <h2 className="mt-3 fw-bold">{t('common.brand')}</h2>
+            <p className="text-muted">{t('auth.login.subtitle')}</p>
           </div>
 
           {generalError && <Alert variant="danger">{generalError}</Alert>}
 
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
-              <Form.Label>Email Address</Form.Label>
+              <Form.Label>{t('auth.emailLabel')}</Form.Label>
               <Form.Control
                 type="email"
-                placeholder="Enter your email"
+                placeholder={t('auth.emailPlaceholder')}
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 isInvalid={!!errors.email}
               />
-              <Form.Control.Feedback type="invalid">{errors.email}</Form.Control.Feedback>
+              <Form.Control.Feedback type="invalid">{errors.email && t(errors.email)}</Form.Control.Feedback>
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Password</Form.Label>
+              <Form.Label>{t('auth.passwordLabel')}</Form.Label>
               <Form.Control
                 type="password"
-                placeholder="Enter your password"
+                placeholder={t('auth.login.passwordPlaceholder')}
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 isInvalid={!!errors.password}
               />
-              <Form.Control.Feedback type="invalid">{errors.password}</Form.Control.Feedback>
+              <Form.Control.Feedback type="invalid">{errors.password && t(errors.password)}</Form.Control.Feedback>
             </Form.Group>
 
             <Form.Group className="mb-4">
-              <Form.Check type="checkbox" label="Remember me" />
+              <Form.Check type="checkbox" label={t('auth.login.remember')} />
             </Form.Group>
 
             <Button
@@ -101,7 +104,7 @@ function LoginPage() {
               className="w-100 py-2 fw-bold"
               disabled={isLoading}
             >
-              {isLoading ? 'Logging in...' : 'Login'}
+              {isLoading ? t('auth.login.submitting') : t('auth.login.submit')}
             </Button>
           </Form>
 
@@ -109,14 +112,14 @@ function LoginPage() {
 
           <div className="text-center">
             <p className="small text-muted">
-              Don't have an account?{' '}
+              {t('auth.noAccount')}{' '}
               <Link to="/register" className="text-success fw-bold">
-                Register here
+                {t('auth.registerHere')}
               </Link>
             </p>
             <p className="small text-muted">
               <Link to="/forgot-password" className="text-secondary">
-                Forgot your password?
+                {t('auth.login.forgot')}
               </Link>
             </p>
           </div>

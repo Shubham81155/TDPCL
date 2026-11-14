@@ -1,7 +1,13 @@
 // src/pages/Admin/Complaints.jsx
 import React, { useCallback, useMemo, useState } from 'react';
 import { Container, Card, Table, Spinner, Badge, Button, Modal, Form, Row, Col, InputGroup, Pagination } from 'react-bootstrap';
-import { useAdminComplaints, useActiveOfficers, useAssignComplaint } from '../../hooks/useComplaints';
+import { useSearchParams } from 'react-router-dom';
+import { useQuery } from 'react-query';
+import apiClient from '../../services/api';
+import { complaintKeys, useActiveOfficers, useAssignComplaint } from '../../hooks/useComplaints';
+import { useWards } from '../../hooks/useWards';
+import useDateRange, { describeRange } from '../../hooks/useDateRange';
+import DateRangeFilter from '../../components/admin/DateRangeFilter';
 import StatusBadge from '../../components/common/StatusBadge';
 import toast from 'react-hot-toast';
 import { formatComplaintCategory, COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
@@ -13,13 +19,30 @@ const URGENCY_VARIANTS = { critical: 'danger', high: 'danger', medium: 'warning'
 const statusLabel = (s) => (s ? s.replace(/_/g, ' ') : 'unknown');
 
 function AdminComplaints() {
-  const { data: complaintsData, isLoading } = useAdminComplaints();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const range = useDateRange();
+  // Filters may be preset from the URL (e.g. links from Analytics): ?category=&ward=&officer=&status=
+  const [wardFilter, setWardFilter] = useState(() => searchParams.get('ward') || '');
+  const [officerFilter, setOfficerFilter] = useState(() => searchParams.get('officer') || '');
+  const listParams = useMemo(
+    () => ({ ...(wardFilter ? { ward_id: wardFilter } : {}), ...range.params }),
+    [wardFilter, range.params]
+  );
+  const { data: complaintsData, isLoading } = useQuery(
+    [...complaintKeys.admin, listParams],
+    async () => (await apiClient.get('/admin/complaints', { params: listParams })).data?.data || [],
+    { onError: () => toast.error('Failed to load complaints'), keepPreviousData: true }
+  );
+  const { data: wardsData } = useWards();
   const { data: officersData } = useActiveOfficers();
   const assignComplaint = useAssignComplaint();
   const complaints = useMemo(() => complaintsData || [], [complaintsData]);
   const officers = useMemo(() => officersData || [], [officersData]);
-  const [statusFilter, setStatusFilter] = useState('all');
-  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState(() => {
+    const v = searchParams.get('status');
+    return STATUSES.includes(v) ? v : 'all';
+  });
+  const [categoryFilter, setCategoryFilter] = useState(() => searchParams.get('category') || 'all');
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
 
@@ -36,20 +59,29 @@ function AdminComplaints() {
     [officers]
   );
 
+  // Ward/officer scoped list (status chip counts reflect these filters)
+  const scoped = useMemo(
+    () =>
+      officerFilter
+        ? complaints.filter((x) => String(x.assigned_officer_id) === String(officerFilter))
+        : complaints,
+    [complaints, officerFilter]
+  );
+
   const counts = useMemo(() => {
-    const c = { all: complaints.length };
+    const c = { all: scoped.length };
     STATUSES.forEach((s) => {
       c[s] = 0;
     });
-    complaints.forEach((x) => {
+    scoped.forEach((x) => {
       if (c[x.status] !== undefined) c[x.status] += 1;
     });
     return c;
-  }, [complaints]);
+  }, [scoped]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return complaints
+    return scoped
       .filter((c) => statusFilter === 'all' || c.status === statusFilter)
       .filter((c) => categoryFilter === 'all' || c.category === categoryFilter)
       .filter((c) => {
@@ -59,7 +91,7 @@ function AdminComplaints() {
         );
       })
       .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-  }, [complaints, statusFilter, categoryFilter, search]);
+  }, [scoped, statusFilter, categoryFilter, search]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
   const currentPage = Math.min(page, totalPages);
@@ -94,6 +126,58 @@ function AdminComplaints() {
 
   const chips = ['all', ...STATUSES];
 
+  const dropParam = (...keys) => {
+    const next = new URLSearchParams(searchParams);
+    keys.forEach((k) => next.delete(k));
+    setSearchParams(next, { replace: true });
+  };
+
+  const wardName = (wardsData || []).find((w) => String(w.ward_id) === String(wardFilter))?.name;
+  const activeChips = [];
+  if (categoryFilter !== 'all') {
+    activeChips.push({
+      key: 'category',
+      label: `Category: ${formatComplaintCategory(categoryFilter)}`,
+      remove: () => {
+        setCategoryFilter('all');
+        dropParam('category');
+      },
+    });
+  }
+  if (wardFilter) {
+    activeChips.push({
+      key: 'ward',
+      label: `Ward: ${wardName || `#${wardFilter}`}`,
+      remove: () => {
+        setWardFilter('');
+        dropParam('ward');
+      },
+    });
+  }
+  if (officerFilter) {
+    activeChips.push({
+      key: 'officer',
+      label: `Officer: ${officerName(officerFilter) !== 'Unassigned' ? officerName(officerFilter) : `#${officerFilter}`}`,
+      remove: () => {
+        setOfficerFilter('');
+        dropParam('officer');
+      },
+    });
+  }
+  if (statusFilter !== 'all') {
+    activeChips.push({
+      key: 'status',
+      label: `Status: ${statusLabel(statusFilter)}`,
+      remove: () => {
+        setStatusFilter('all');
+        dropParam('status');
+      },
+    });
+  }
+  if (range.from || range.to) {
+    activeChips.push({ key: 'dates', label: `Dates: ${describeRange(range.from, range.to)}`, remove: range.clear });
+  }
+
   return (
     <Container className="py-4">
       <h2 className="fw-bold mb-4">
@@ -111,6 +195,7 @@ function AdminComplaints() {
             aria-pressed={statusFilter === s}
             onClick={() => {
               setStatusFilter(s);
+              dropParam('status');
               setPage(1);
             }}
           >
@@ -128,6 +213,7 @@ function AdminComplaints() {
                 value={categoryFilter}
                 onChange={(e) => {
                   setCategoryFilter(e.target.value);
+                  dropParam('category');
                   setPage(1);
                 }}
               >
@@ -160,6 +246,31 @@ function AdminComplaints() {
               </InputGroup>
             </Col>
           </Row>
+          <div className="mt-3">
+            <DateRangeFilter
+              idPrefix="complaints-range"
+              from={range.from}
+              to={range.to}
+              setRange={range.setRange}
+              clear={range.clear}
+            />
+          </div>
+          {activeChips.length > 0 && (
+            <div className="d-flex flex-wrap gap-2 mt-3" aria-label="Active filters" data-testid="filter-chips">
+              {activeChips.map((c) => (
+                <Button
+                  key={c.key}
+                  size="sm"
+                  variant="outline-success"
+                  className="rounded-pill"
+                  onClick={c.remove}
+                  aria-label={`Remove filter ${c.label}`}
+                >
+                  {c.label} <span aria-hidden="true">&times;</span>
+                </Button>
+              ))}
+            </div>
+          )}
         </Card.Body>
       </Card>
 
@@ -231,7 +342,7 @@ function AdminComplaints() {
                 </tbody>
               </Table>
             </div>
-            <Card.Footer className="bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+            <Card.Footer className="bg-body-tertiary d-flex flex-wrap justify-content-between align-items-center gap-2">
               <small className="text-muted">
                 Showing {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
               </small>

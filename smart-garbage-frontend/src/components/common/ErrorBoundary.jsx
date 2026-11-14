@@ -1,7 +1,10 @@
 // src/components/common/ErrorBoundary.jsx
 import React from 'react';
+import LanguageContext from '../../i18n/LanguageContext';
 
 class ErrorBoundary extends React.Component {
+  static contextType = LanguageContext;
+
   constructor(props) {
     super(props);
     this.state = { hasError: false };
@@ -19,17 +22,16 @@ class ErrorBoundary extends React.Component {
   render() {
     if (!this.state.hasError) return this.props.children;
 
+    const { t } = this.context;
     return (
       <div className="container py-5 text-center" role="alert">
-        <h2 className="fw-bold mb-2">Something went wrong</h2>
-        <p className="text-muted mb-4">
-          An unexpected error occurred. You can reload the page or head back to your dashboard.
-        </p>
+        <h2 className="fw-bold mb-2">{t('common.errorBoundary.title')}</h2>
+        <p className="text-muted mb-4">{t('common.errorBoundary.text')}</p>
         <button type="button" className="btn btn-success me-2" onClick={() => window.location.reload()}>
-          Reload page
+          {t('common.errorBoundary.reload')}
         </button>
         <a className="btn btn-outline-secondary" href="/">
-          Go to dashboard
+          {t('common.errorBoundary.goDashboard')}
         </a>
       </div>
     );

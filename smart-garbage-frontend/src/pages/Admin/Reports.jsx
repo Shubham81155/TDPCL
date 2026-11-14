@@ -3,10 +3,12 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Container, Row, Col, Card, Form, Button, Table, Spinner, ProgressBar, Alert } from 'react-bootstrap';
 import toast from 'react-hot-toast';
 import apiClient from '../../services/api';
+import useDateRange from '../../hooks/useDateRange';
+import DateRangeFilter from '../../components/admin/DateRangeFilter';
 import { COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
 
 const STATUSES = ['new', 'assigned', 'pending', 'in_progress', 'resolved', 'rejected'];
-const EMPTY_FILTERS = { status: '', category: '', ward_id: '', dateFrom: '', dateTo: '' };
+const EMPTY_FILTERS = { status: '', category: '', ward_id: '' };
 
 const labelize = (v) =>
   (v || 'unclassified')
@@ -36,7 +38,7 @@ const countBy = (rows, getter) => {
 function Breakdown({ title, entries, total, formatLabel }) {
   return (
     <Card className="border-0 shadow-sm h-100">
-      <Card.Header className="bg-white fw-semibold">{title}</Card.Header>
+      <Card.Header className="bg-body-tertiary fw-semibold">{title}</Card.Header>
       <Card.Body>
         {entries.length === 0 ? (
           <p className="text-muted mb-0">No data</p>
@@ -59,17 +61,16 @@ function Breakdown({ title, entries, total, formatLabel }) {
 }
 
 function AdminReports() {
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [selects, setSelects] = useState(EMPTY_FILTERS);
+  const range = useDateRange();
+  const filters = useMemo(() => ({ ...selects, ...range.params }), [selects, range.params]);
   const [wards, setWards] = useState([]);
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [exporting, setExporting] = useState(false);
 
-  const dateError =
-    filters.dateFrom && filters.dateTo && filters.dateFrom > filters.dateTo
-      ? 'The "From" date must be on or before the "To" date.'
-      : '';
+  const dateError = range.error;
 
   useEffect(() => {
     let active = true;
@@ -111,7 +112,7 @@ function AdminReports() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFilters((prev) => ({ ...prev, [name]: value }));
+    setSelects((prev) => ({ ...prev, [name]: value }));
   };
 
   const byStatus = useMemo(() => countBy(rows, (r) => r.status), [rows]);
@@ -177,7 +178,7 @@ function AdminReports() {
         <Card.Body>
           <Form onSubmit={(e) => e.preventDefault()} noValidate>
             <Row className="g-3">
-              <Col xs={12} sm={6} lg={2}>
+              <Col xs={12} sm={6} lg={3}>
                 <Form.Group controlId="report-status">
                   <Form.Label>Status</Form.Label>
                   <Form.Select name="status" value={filters.status} onChange={handleChange}>
@@ -203,7 +204,7 @@ function AdminReports() {
                   </Form.Select>
                 </Form.Group>
               </Col>
-              <Col xs={12} sm={6} lg={2}>
+              <Col xs={12} sm={6} lg={3}>
                 <Form.Group controlId="report-ward">
                   <Form.Label>Ward</Form.Label>
                   <Form.Select name="ward_id" value={filters.ward_id} onChange={handleChange}>
@@ -216,41 +217,30 @@ function AdminReports() {
                   </Form.Select>
                 </Form.Group>
               </Col>
-              <Col xs={6} sm={3} lg={2}>
-                <Form.Group controlId="report-date-from">
-                  <Form.Label>From</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="dateFrom"
-                    value={filters.dateFrom}
-                    onChange={handleChange}
-                    isInvalid={!!dateError}
-                  />
-                </Form.Group>
-              </Col>
-              <Col xs={6} sm={3} lg={2}>
-                <Form.Group controlId="report-date-to">
-                  <Form.Label>To</Form.Label>
-                  <Form.Control
-                    type="date"
-                    name="dateTo"
-                    value={filters.dateTo}
-                    onChange={handleChange}
-                    isInvalid={!!dateError}
-                  />
-                </Form.Group>
-              </Col>
-              <Col xs={12} sm={6} lg={1} className="d-flex align-items-end">
-                <Button variant="outline-secondary" className="w-100" onClick={() => setFilters(EMPTY_FILTERS)}>
+              <Col xs={12} sm={6} lg={3} className="d-flex align-items-end">
+                <Button variant="outline-secondary" className="w-100" onClick={() => {
+                    setSelects(EMPTY_FILTERS);
+                    range.clear();
+                  }}
+                >
                   Reset
                 </Button>
               </Col>
             </Row>
-            {dateError && (
-              <div className="text-danger small mt-2" role="alert">
-                {dateError}
-              </div>
-            )}
+            <div className="mt-3">
+              <DateRangeFilter
+                idPrefix="report-range"
+                from={range.from}
+                to={range.to}
+                setRange={range.setRange}
+                clear={range.clear}
+              />
+              {dateError && (
+                <div className="text-danger small mt-1" role="alert">
+                  {dateError}
+                </div>
+              )}
+            </div>
           </Form>
         </Card.Body>
       </Card>
@@ -289,7 +279,7 @@ function AdminReports() {
           </Row>
 
           <Card className="border-0 shadow-sm">
-            <Card.Header className="bg-white fw-semibold">
+            <Card.Header className="bg-body-tertiary fw-semibold">
               Preview (first {preview.length} of {rows.length})
             </Card.Header>
             <Table responsive hover className="mb-0 align-middle">
