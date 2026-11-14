@@ -1,5 +1,5 @@
 jest.mock('../../../src/services/complaintService', () => ({
-  getComplaintsByUser: jest.fn(), countComplaintsByUser: jest.fn(), getAssignedComplaintsForUser: jest.fn(),
+  getComplaintSummaryByUser: jest.fn(), getComplaintsByUser: jest.fn(), countComplaintsByUser: jest.fn(), getAssignedComplaintsForUser: jest.fn(),
   getAuthorizedComplaint: jest.fn(), getComplaintHistory: jest.fn(), updateStatusByOfficer: jest.fn(),
   resolveComplaintForUser: jest.fn(),
 }));
@@ -196,5 +196,22 @@ describe('POST /:id/resolve', () => {
     const res = await request(app).post('/api/complaints/5/resolve').set('Authorization', officer);
     expect(res.status).toBe(404);
     expect(svc.resolveComplaintForUser).toHaveBeenCalledWith('5', undefined, undefined, 8);
+  });
+});
+
+describe('GET /summary', () => {
+  it('401 without token, 403 for officer/admin', async () => {
+    expect((await request(app).get('/api/complaints/summary')).status).toBe(401);
+    expect((await request(app).get('/api/complaints/summary').set('Authorization', officer)).status).toBe(403);
+    expect((await request(app).get('/api/complaints/summary').set('Authorization', admin)).status).toBe(403);
+  });
+  it('200 with summary for the caller; not shadowed by /:id', async () => {
+    const summary = { total: 3, pending: 1, in_progress: 1, resolved: 1, rejected: 0 };
+    svc.getComplaintSummaryByUser.mockResolvedValue(summary);
+    const res = await request(app).get('/api/complaints/summary').set('Authorization', citizen);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ success: true, summary });
+    expect(svc.getComplaintSummaryByUser).toHaveBeenCalledWith(7);
+    expect(svc.getAuthorizedComplaint).not.toHaveBeenCalled();
   });
 });

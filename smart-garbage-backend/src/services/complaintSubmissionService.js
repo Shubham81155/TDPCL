@@ -9,6 +9,7 @@ const logger = require('../utils/logger');
 const complaintService = require('./complaintService');
 const assignmentService = require('./assignmentService');
 const wardService = require('./wardService');
+const { scheduleClassification } = require('./classificationService');
 const {
   sendComplaintSubmittedEmail,
   sendComplaintAssignedEmail,
@@ -160,6 +161,14 @@ const submitComplaint = async ({ user, body, file }) => {
     title: complaintData.title,
     area: complaintData.area,
     category: complaintData.category,
+  });
+
+  // Optional advisory image classification: fire-and-forget, never delays or fails the
+  // request, never overwrites the citizen-chosen category.
+  scheduleClassification({
+    complaintId: complaint.complaint_id,
+    buffer: file.buffer,
+    fileName: file.originalname,
   });
 
   return assignment || { ...complaint, assigned: false };

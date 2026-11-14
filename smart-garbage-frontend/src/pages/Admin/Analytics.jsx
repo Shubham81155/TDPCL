@@ -1,6 +1,7 @@
 // src/pages/Admin/Analytics.jsx
 import React, { useMemo } from 'react';
 import { Container, Row, Col, Card } from 'react-bootstrap';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -11,6 +12,8 @@ import {
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
 import { useAdminAnalytics } from '../../hooks/useAdminStats';
+import useDateRange, { describeRange } from '../../hooks/useDateRange';
+import DateRangeFilter from '../../components/admin/DateRangeFilter';
 import { errorMessage } from '../../hooks/queryUtils';
 import LoadingState from '../../components/common/LoadingState';
 import ErrorState from '../../components/common/ErrorState';
@@ -27,18 +30,47 @@ const num = (v) => {
 };
 const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
 
-const barOptions = {
+// Colour reflects how good the rate is; grey when there is nothing to measure yet.
+const rateColor = (rate, total) => {
+  if (!total) return '#6c757d';
+  if (rate >= 70) return '#28a745';
+  if (rate >= 40) return '#e0a800';
+  return '#dc3545';
+};
+
+const HINT = 'click to view these complaints';
+
+// Link into the complaints page with the given filter plus the active date range.
+export const complaintsLink = (filters, range) => {
+  const p = new URLSearchParams();
+  Object.entries(filters).forEach(([k, v]) => {
+    if (v !== undefined && v !== null && v !== '') p.set(k, String(v));
+  });
+  if (range?.from) p.set('from', range.from);
+  if (range?.to) p.set('to', range.to);
+  return `/admin/complaints?${p.toString()}`;
+};
+
+const makeBarOptions = (onBarClick) => ({
   responsive: true,
   maintainAspectRatio: false,
   plugins: { legend: { position: 'bottom' } },
   scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
-};
+  onClick: (_evt, elements) => {
+    if (elements && elements.length) onBarClick(elements[0].index);
+  },
+  onHover: (evt, elements) => {
+    const target = evt?.native?.target;
+    if (target && target.style) target.style.cursor = elements && elements.length ? 'pointer' : 'default';
+  },
+});
 
-function ChartCard({ title, headerColor, empty, label, children }) {
+function ChartCard({ title, empty, label, links, children }) {
   return (
     <Card className="border-0 shadow-sm h-100">
-      <Card.Header className="text-white" style={{ background: headerColor }}>
+      <Card.Header className="bg-body-tertiary">
         <Card.Title className="mb-0 h5">{title}</Card.Title>
+        {!empty && <small className="text-muted">Tip: {HINT}</small>}
       </Card.Header>
       <Card.Body>
         {empty ? (
@@ -47,6 +79,15 @@ function ChartCard({ title, headerColor, empty, label, children }) {
           <>
             <div style={{ position: 'relative', height: 300 }}>{children}</div>
             <p className="visually-hidden">{label}</p>
+            {links && links.length > 0 && (
+              <ul className="list-unstyled mb-0 visually-hidden-focusable d-flex flex-wrap gap-2 small" aria-label={`${title}: ${HINT}`}>
+                {links.map((l) => (
+                  <li key={l.to}>
+                    <Link to={l.to}>{l.text}</Link>
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         )}
       </Card.Body>
@@ -55,12 +96,15 @@ function ChartCard({ title, headerColor, empty, label, children }) {
 }
 
 function AdminAnalytics() {
-  const { data, isLoading, error: queryError, refetch } = useAdminAnalytics();
+  const range = useDateRange();
+  const navigate = useNavigate();
+  const { data, isLoading, error: queryError, refetch } = useAdminAnalytics(range.params);
   const error = queryError ? errorMessage(queryError, 'Failed to load analytics') : null;
 
   const categoryStats = useMemo(
     () =>
       (data?.categories || []).map((c) => ({
+        value: c.category,
         label: formatComplaintCategory(c.category),
         count: num(c.count),
         resolved: num(c.resolved),
@@ -92,6 +136,19 @@ function AdminAnalytics() {
     [data]
   );
 
+  const categoryHref = (c) => complaintsLink({ category: c.value }, range);
+  const wardHref = (w) => complaintsLink({ ward: w.id }, range);
+  const officerHref = (o) => (o.id != null ? complaintsLink({ officer: o.id }, range) : null);
+
+  const categoryOptions = makeBarOptions((i) => {
+    const c = categoryStats[i];
+    if (c && c.value) navigate(categoryHref(c));
+  });
+  const wardOptions = makeBarOptions((i) => {
+    const w = wardStats[i];
+    if (w && w.id != null) navigate(wardHref(w));
+  });
+
   const categoryChart = useMemo(
     () => ({
       labels: categoryStats.map((c) => c.label),
@@ -114,10 +171,10 @@ function AdminAnalytics() {
     [wardStats]
   );
 
-  const categoryLabel = `Bar chart of complaints by category: ${categoryStats
+  const categoryLabel = `Bar chart of complaints by category (${HINT}): ${categoryStats
     .map((c) => `${c.label} ${c.count} total, ${c.resolved} resolved`)
     .join('; ')}.`;
-  const wardLabel = `Bar chart of complaints by ward: ${wardStats
+  const wardLabel = `Bar chart of complaints by ward (${HINT}): ${wardStats
     .map((w) => `${w.name} ${w.total} total, ${w.resolved} resolved`)
     .join('; ')}.`;
 
@@ -127,6 +184,18 @@ function AdminAnalytics() {
         <i className="fas fa-chart-bar me-2" style={{ color: GREEN }} aria-hidden="true"></i>
         Analytics
       </h2>
+      <div className="mb-2 text-muted small">
+        Showing: <span className="badge text-bg-secondary">{describeRange(range.from, range.to)}</span>
+      </div>
+      <div className="mb-4">
+        <DateRangeFilter
+          idPrefix="analytics-range"
+          from={range.from}
+          to={range.to}
+          setRange={range.setRange}
+          clear={range.clear}
+        />
+      </div>
 
       {isLoading ? (
         <LoadingState label="Loading analytics" />
@@ -138,11 +207,11 @@ function AdminAnalytics() {
             <Col lg={6}>
               <ChartCard
                 title="Complaints by Category"
-                headerColor={GREEN}
                 empty={categoryStats.length === 0}
                 label={categoryLabel}
+                links={categoryStats.filter((c) => c.value).map((c) => ({ to: categoryHref(c), text: `${c.label} (${HINT})` }))}
               >
-                <Bar data={categoryChart} options={barOptions} role="img" aria-label={categoryLabel}>
+                <Bar data={categoryChart} options={categoryOptions} role="img" aria-label={categoryLabel}>
                   {categoryLabel}
                 </Bar>
               </ChartCard>
@@ -150,11 +219,10 @@ function AdminAnalytics() {
             <Col lg={6}>
               <ChartCard
                 title="Complaints by Ward"
-                headerColor={DARK_GREEN}
                 empty={wardStats.length === 0}
                 label={wardLabel}
               >
-                <Bar data={wardChart} options={barOptions} role="img" aria-label={wardLabel}>
+                <Bar data={wardChart} options={wardOptions} role="img" aria-label={wardLabel}>
                   {wardLabel}
                 </Bar>
               </ChartCard>
@@ -164,7 +232,7 @@ function AdminAnalytics() {
           <Row className="g-3">
             <Col>
               <Card className="border-0 shadow-sm">
-                <Card.Header className="text-white" style={{ background: GREEN }}>
+                <Card.Header className="bg-body-tertiary">
                   <Card.Title className="mb-0 h5">Officer Performance (Top 10)</Card.Title>
                 </Card.Header>
                 <Card.Body>
@@ -191,13 +259,21 @@ function AdminAnalytics() {
                           {officers.map((o, idx) => (
                             <tr key={o.id ?? idx}>
                               <td>{idx + 1}</td>
-                              <td className="fw-bold">{o.name}</td>
+                              <td className="fw-bold">
+                                {officerHref(o) ? (
+                                  <Link to={officerHref(o)} title={HINT} aria-label={`${o.name}: ${HINT}`}>
+                                    {o.name}
+                                  </Link>
+                                ) : (
+                                  o.name
+                                )}
+                              </td>
                               <td className="text-end">{o.total}</td>
                               <td className="text-end">{o.resolved}</td>
                               <td className="text-end">{o.active}</td>
                               <td className="text-end">{o.avgHours == null ? '-' : o.avgHours.toFixed(1)}</td>
                               <td className="text-end">
-                                <span className="badge" style={{ background: GREEN }}>
+                                <span className="badge" style={{ background: rateColor(o.rate, o.total) }}>
                                   {o.rate.toFixed(1)}%
                                 </span>
                               </td>
@@ -216,7 +292,7 @@ function AdminAnalytics() {
             <Row className="g-3 mt-1">
               <Col>
                 <Card className="border-0 shadow-sm">
-                  <Card.Header className="text-white" style={{ background: DARK_GREEN }}>
+                  <Card.Header className="bg-body-tertiary">
                     <Card.Title className="mb-0 h5">Ward Details</Card.Title>
                   </Card.Header>
                   <Card.Body>
@@ -234,12 +310,20 @@ function AdminAnalytics() {
                         <tbody>
                           {wardStats.map((w, idx) => (
                             <tr key={w.id ?? idx}>
-                              <td className="fw-bold">{w.name}</td>
+                              <td className="fw-bold">
+                                {w.id != null ? (
+                                  <Link to={wardHref(w)} title={HINT} aria-label={`${w.name}: ${HINT}`}>
+                                    {w.name}
+                                  </Link>
+                                ) : (
+                                  w.name
+                                )}
+                              </td>
                               <td className="text-end">{w.total}</td>
                               <td className="text-end">{w.resolved}</td>
                               <td className="text-end">{w.officers}</td>
                               <td className="text-end">
-                                <span className="badge" style={{ background: GREEN }}>
+                                <span className="badge" style={{ background: rateColor(pct(w.resolved, w.total), w.total) }}>
                                   {pct(w.resolved, w.total)}%
                                 </span>
                               </td>

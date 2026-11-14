@@ -1,14 +1,28 @@
 // src/pages/Citizen/ComplaintForm.jsx
-import React, { useState, useEffect, useRef } from 'react';
-import { Container, Form, Button, Card, Row, Col, Alert, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Container, Form, Button, Card, Row, Col, Spinner } from 'react-bootstrap';
 import { useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import { getCurrentLocation } from '../../utils/locationUtils';
 import { COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
+import MapPicker from '../../components/common/MapPicker';
+import { useTranslation } from '../../i18n/LanguageContext';
+import { categoryLabel } from '../../i18n/labels';
 import toast from 'react-hot-toast';
 import { queryClient } from '../../queryClient';
 
+const MAX_IMAGE_BYTES = 10 * 1024 * 1024;
+const ALLOWED_TYPES = ['image/jpeg', 'image/png', 'image/gif'];
+const TAP_TARGET = { minHeight: 48 };
+
+const parseCoord = (raw, min, max) => {
+  if (raw === '' || raw === null || raw === undefined) return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= min && n <= max ? n : null;
+};
+
 function ComplaintForm() {
+  const { t } = useTranslation();
   const [formData, setFormData] = useState({
     latitude: '',
     longitude: '',
@@ -19,71 +33,123 @@ function ComplaintForm() {
   });
   const [errors, setErrors] = useState({});
   const [isLoading, setIsLoading] = useState(false);
-  const [gettingLocation, setGettingLocation] = useState(false);
-  const cameraInputRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const photoButtonRef = useRef(null);
+  const detailsRef = useRef(null);
+  const latRef = useRef(null);
+  const lngRef = useRef(null);
+  const categoryRef = useRef(null);
   const navigate = useNavigate();
 
+  // Quietly pre-fill the location if the browser allows it; never blocks the form.
   useEffect(() => {
-    getDefaultLocation();
+    let cancelled = false;
+    getCurrentLocation()
+      .then((location) => {
+        if (cancelled || !location) return;
+        setFormData((prev) =>
+          prev.latitude !== '' || prev.longitude !== ''
+            ? prev
+            : {
+                ...prev,
+                latitude: String(location.latitude),
+                longitude: String(location.longitude),
+              }
+        );
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  const getDefaultLocation = async () => {
-    setGettingLocation(true);
-    try {
-      const location = await getCurrentLocation();
-      setFormData((prev) => ({
-        ...prev,
-        latitude: location.latitude.toString(),
-        longitude: location.longitude.toString(),
-      }));
-      toast.success('Location detected successfully');
-    } catch (error) {
-      toast.error('Could not detect location. Please enter manually.');
-    } finally {
-      setGettingLocation(false);
-    }
+  const previewUrl = useMemo(
+    () => (formData.image ? URL.createObjectURL(formData.image) : null),
+    [formData.image]
+  );
+  useEffect(
+    () => () => {
+      if (previewUrl && URL.revokeObjectURL) URL.revokeObjectURL(previewUrl);
+    },
+    [previewUrl]
+  );
+
+  const lat = parseCoord(formData.latitude, -90, 90);
+  const lng = parseCoord(formData.longitude, -180, 180);
+  const pin = lat !== null && lng !== null ? { lat, lng } : null;
+
+  const handlePinChange = ({ lat: newLat, lng: newLng }) => {
+    setFormData((prev) => ({ ...prev, latitude: String(newLat), longitude: String(newLng) }));
+    setErrors((prev) => ({ ...prev, latitude: '', longitude: '', location: '' }));
   };
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.latitude) newErrors.latitude = 'Latitude is required';
-    if (!formData.longitude) newErrors.longitude = 'Longitude is required';
-    if (!formData.category) newErrors.category = 'Category is required';
-    if (!formData.image) newErrors.image = 'Image is required';
+    // Errors hold catalog keys (under citizen.form.errors) and are translated at render.
+    if (!formData.image) newErrors.image = 'imageRequired';
+    if (formData.latitude === '' || formData.longitude === '') {
+      newErrors.location = 'locationRequired';
+      if (formData.latitude === '') newErrors.latitude = 'latRequired';
+      if (formData.longitude === '') newErrors.longitude = 'lngRequired';
+    }
+    if (formData.latitude !== '' && lat === null) {
+      newErrors.latitude = 'latRange';
+    }
+    if (formData.longitude !== '' && lng === null) {
+      newErrors.longitude = 'lngRange';
+    }
+    if (!formData.category) newErrors.category = 'categoryRequired';
     setErrors(newErrors);
+
+    // Focus the first invalid field, in visual order.
+    if (newErrors.image) {
+      photoButtonRef.current && photoButtonRef.current.focus();
+    } else if (newErrors.latitude || newErrors.longitude || newErrors.location) {
+      if (detailsRef.current) detailsRef.current.open = true;
+      const target = newErrors.longitude && !newErrors.latitude ? lngRef : latRef;
+      target.current && target.current.focus();
+    } else if (newErrors.category) {
+      categoryRef.current && categoryRef.current.focus();
+    }
     return Object.keys(newErrors).length === 0;
   };
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+    setErrors((prev) => ({
+      ...prev,
+      [name]: '',
+      ...(name === 'latitude' || name === 'longitude' ? { location: '' } : {}),
+    }));
   };
 
   const handleImageChange = (e) => {
-    const file = e.target.files[0];
+    const file = e.target.files && e.target.files[0];
     if (file) {
-      if (file.size > 10 * 1024 * 1024) {
-        setErrors((prev) => ({ ...prev, image: 'Image size must be less than 10MB' }));
-        return;
+      if (file.size > MAX_IMAGE_BYTES) {
+        setErrors((prev) => ({ ...prev, image: 'imageTooLarge' }));
+      } else if (!ALLOWED_TYPES.includes(file.type)) {
+        setErrors((prev) => ({ ...prev, image: 'imageType' }));
+      } else {
+        setFormData((prev) => ({ ...prev, image: file }));
+        setErrors((prev) => ({ ...prev, image: '' }));
       }
-      if (!['image/jpeg', 'image/png', 'image/gif'].includes(file.type)) {
-        setErrors((prev) => ({ ...prev, image: 'Only JPEG, PNG, and GIF are allowed' }));
-        return;
-      }
-      setFormData((prev) => ({ ...prev, image: file }));
-      setErrors((prev) => ({ ...prev, image: '' }));
+    }
+    try {
+      e.target.value = ''; // allow picking the same file again
+    } catch (err) {
+      // some browsers refuse to reset file inputs; harmless
     }
   };
 
-  const openCamera = () => {
-    if (cameraInputRef.current) {
-      cameraInputRef.current.click();
-    }
+  const openPhotoPicker = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!validateForm()) return;
+    if (isLoading || !validateForm()) return;
 
     setIsLoading(true);
     try {
@@ -103,10 +169,11 @@ function ComplaintForm() {
 
       queryClient.invalidateQueries('complaints');
       queryClient.invalidateQueries('admin');
-      toast.success(response.data?.message || 'Complaint submitted successfully');
+      // Server messages are shown as returned (English); only our own fallbacks are translated.
+      toast.success(response.data?.message || t('citizen.form.success'));
       navigate('/citizen/complaints');
     } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Failed to submit complaint';
+      const errorMsg = error.response?.data?.error || t('citizen.form.failed');
       toast.error(errorMsg);
     } finally {
       setIsLoading(false);
@@ -114,188 +181,223 @@ function ComplaintForm() {
   };
 
   return (
-    <Container className="py-4">
-      <Row>
-        <Col lg={8} className="mx-auto">
+    <Container className="py-3 py-md-4 px-3">
+      <Row className="mx-0">
+        <Col lg={8} className="mx-auto px-0">
           <Card className="border-0 shadow-lg">
             <Card.Header className="bg-success text-white">
-              <Card.Title className="mb-0">
+              <Card.Title className="mb-0 h5">
                 <i className="fas fa-plus-circle me-2"></i>
-                Report a New Issue
+                {t('citizen.form.title')}
               </Card.Title>
             </Card.Header>
 
-            <Card.Body className="p-4">
-              <Alert variant="info">
-                <i className="fas fa-info-circle me-2"></i>
-                Please choose the most accurate category and upload a clear photo of the issue.
-              </Alert>
-
-              <Form onSubmit={handleSubmit}>
-                <Row>
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-bold">Latitude *</Form.Label>
-                      <Form.Control
-                        type="number"
-                        name="latitude"
-                        step="0.0001"
-                        placeholder="e.g., 19.0760"
-                        value={formData.latitude}
-                        onChange={handleChange}
-                        isInvalid={!!errors.latitude}
-                      />
-                      <Form.Control.Feedback type="invalid">{errors.latitude}</Form.Control.Feedback>
-                    </Form.Group>
-                  </Col>
-
-                  <Col md={6}>
-                    <Form.Group className="mb-3">
-                      <Form.Label className="fw-bold">Longitude *</Form.Label>
-                      <Form.Control
-                        type="number"
-                        name="longitude"
-                        step="0.0001"
-                        placeholder="e.g., 72.8777"
-                        value={formData.longitude}
-                        onChange={handleChange}
-                        isInvalid={!!errors.longitude}
-                      />
-                      <Form.Control.Feedback type="invalid">{errors.longitude}</Form.Control.Feedback>
-                    </Form.Group>
-                  </Col>
-                </Row>
-
-                <Form.Group className="mb-3">
-                  <Form.Label className="fw-bold">Category *</Form.Label>
-                  <Form.Select
-                    name="category"
-                    value={formData.category}
-                    onChange={handleChange}
-                    isInvalid={!!errors.category}
-                  >
-                    <option value="">Select a category</option>
-                    {COMPLAINT_CATEGORIES.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </Form.Select>
-                  <Form.Control.Feedback type="invalid">{errors.category}</Form.Control.Feedback>
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label className="fw-bold">Description (optional)</Form.Label>
-                  <Form.Control
-                    as="textarea"
-                    rows={3}
-                    name="description"
-                    maxLength={1000}
-                    placeholder="Describe the issue (e.g., overflowing bin near the market gate)"
-                    value={formData.description}
-                    onChange={handleChange}
-                  />
-                  <Form.Text className="text-muted">
-                    {formData.description.length}/1000
-                  </Form.Text>
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label className="fw-bold">Urgency</Form.Label>
-                  <Form.Select
-                    name="urgency_level"
-                    value={formData.urgency_level}
-                    onChange={handleChange}
-                  >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High - Urgent</option>
-                  </Form.Select>
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Button
-                    variant="outline-info"
-                    onClick={getDefaultLocation}
-                    disabled={gettingLocation}
-                    className="w-100"
-                  >
-                    {gettingLocation ? (
-                      <>
-                        <Spinner size="sm" className="me-2" /> Detecting Location...
-                      </>
-                    ) : (
-                      <>
-                        <i className="fas fa-map-marker-alt me-2"></i>
-                        Use My Current Location
-                      </>
-                    )}
-                  </Button>
-                </Form.Group>
-
-                <Form.Group className="mb-3">
-                  <Form.Label className="fw-bold">Photo of Issue *</Form.Label>
-                  
-                  {/* Hidden camera input */}
+            <Card.Body className="p-3 p-md-4">
+              <Form onSubmit={handleSubmit} noValidate>
+                {/* 1. Photo */}
+                <Form.Group className="mb-4">
+                  <Form.Label as="div" className="fw-bold">{t('citizen.form.photoLabel')}</Form.Label>
                   <input
-                    ref={cameraInputRef}
+                    ref={fileInputRef}
                     type="file"
                     accept="image/*"
-                    capture="environment"
                     onChange={handleImageChange}
                     style={{ display: 'none' }}
+                    aria-label={t('citizen.form.photoAria')}
+                    tabIndex={-1}
                   />
 
-                  {/* Camera Button */}
-                  <div className="d-grid gap-2 mb-3">
+                  {previewUrl ? (
+                    <div className="text-center">
+                      <img
+                        src={previewUrl}
+                        alt={t('citizen.form.previewAlt')}
+                        className="img-fluid rounded border"
+                        style={{ maxHeight: 260, width: '100%', objectFit: 'cover' }}
+                      />
+                      <Button
+                        ref={photoButtonRef}
+                        id="complaint-photo-button"
+                        variant="outline-secondary"
+                        className="w-100 mt-2"
+                        style={TAP_TARGET}
+                        onClick={openPhotoPicker}
+                        disabled={isLoading}
+                      >
+                        <i className="fas fa-redo me-2" aria-hidden="true"></i>{t('citizen.form.retake')}
+                      </Button>
+                    </div>
+                  ) : (
                     <Button
-                      variant="primary"
-                      onClick={openCamera}
-                      className="py-3"
+                      ref={photoButtonRef}
+                      id="complaint-photo-button"
+                      variant="outline-success"
+                      className="w-100 d-flex flex-column align-items-center justify-content-center"
+                      style={{ minHeight: 140, borderStyle: 'dashed', borderWidth: 2 }}
+                      onClick={openPhotoPicker}
                       disabled={isLoading}
-                      size="lg"
+                      aria-describedby="complaint-photo-help"
                     >
-                      <i className="fas fa-camera me-2"></i>Click Picture
+                      <i className="fas fa-camera fa-2x mb-2" aria-hidden="true"></i>
+                      <span className="fs-5">{t('citizen.form.takePhoto')}</span>
                     </Button>
-                  </div>
-
-                  <Form.Text className="text-muted d-block mb-3">
-                    Accepted formats: JPEG, PNG, GIF | Max size: 10MB
-                  </Form.Text>
-                  
-                  {errors.image && (
-                    <Alert variant="danger" className="mb-3">
-                      {errors.image}
-                    </Alert>
                   )}
 
-                  {formData.image && (
-                    <div className="mt-3 text-center">
-                      <img
-                        src={URL.createObjectURL(formData.image)}
-                        alt="Preview"
-                        style={{ maxHeight: '250px', borderRadius: '8px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-                      />
-                      <div className="mt-2">
-                        <small className="text-muted">
-                          <i className="fas fa-check-circle text-success me-2"></i>
-                          Photo captured: {formData.image.name}
-                        </small>
-                      </div>
+                  <Form.Text id="complaint-photo-help" className="text-muted d-block mt-2">
+                    {t('citizen.form.photoHelp')}
+                  </Form.Text>
+                  {errors.image && (
+                    <div className="text-danger small mt-1" role="alert">
+                      {t(`citizen.form.errors.${errors.image}`)}
                     </div>
                   )}
                 </Form.Group>
 
-                <div className="d-grid gap-2 d-md-flex justify-content-md-end">
+                {/* 2. Location */}
+                <div className="mb-4">
+                  <div className="fw-bold mb-2">{t('citizen.form.locationLabel')}</div>
+                  <MapPicker value={pin} onChange={handlePinChange} />
+                  {errors.location && (
+                    <div className="text-danger small mt-2" role="alert">
+                      {t(`citizen.form.errors.${errors.location}`)}
+                    </div>
+                  )}
+
+                  <details ref={detailsRef} className="mt-3">
+                    <summary className="py-2" style={TAP_TARGET}>
+                      {t('citizen.form.manualCoords')}
+                    </summary>
+                    <Row className="g-3 mt-0">
+                      <Col xs={12} sm={6}>
+                        <Form.Group controlId="complaint-latitude">
+                          <Form.Label>{t('citizen.form.latitude')}</Form.Label>
+                          <Form.Control
+                            ref={latRef}
+                            type="number"
+                            name="latitude"
+                            step="any"
+                            min={-90}
+                            max={90}
+                            inputMode="decimal"
+                            placeholder={t('citizen.form.latPlaceholder')}
+                            value={formData.latitude}
+                            onChange={handleChange}
+                            isInvalid={!!errors.latitude}
+                            style={TAP_TARGET}
+                          />
+                          <Form.Control.Feedback type="invalid">
+                            {errors.latitude && t(`citizen.form.errors.${errors.latitude}`)}
+                          </Form.Control.Feedback>
+                        </Form.Group>
+                      </Col>
+                      <Col xs={12} sm={6}>
+                        <Form.Group controlId="complaint-longitude">
+                          <Form.Label>{t('citizen.form.longitude')}</Form.Label>
+                          <Form.Control
+                            ref={lngRef}
+                            type="number"
+                            name="longitude"
+                            step="any"
+                            min={-180}
+                            max={180}
+                            inputMode="decimal"
+                            placeholder={t('citizen.form.lngPlaceholder')}
+                            value={formData.longitude}
+                            onChange={handleChange}
+                            isInvalid={!!errors.longitude}
+                            style={TAP_TARGET}
+                          />
+                          <Form.Control.Feedback type="invalid">
+                            {errors.longitude && t(`citizen.form.errors.${errors.longitude}`)}
+                          </Form.Control.Feedback>
+                        </Form.Group>
+                      </Col>
+                    </Row>
+                  </details>
+                </div>
+
+                {/* 3. Category */}
+                <Form.Group className="mb-4" controlId="complaint-category">
+                  <Form.Label className="fw-bold">{t('citizen.form.categoryLabel')}</Form.Label>
+                  <Form.Select
+                    ref={categoryRef}
+                    name="category"
+                    value={formData.category}
+                    onChange={handleChange}
+                    isInvalid={!!errors.category}
+                    style={TAP_TARGET}
+                  >
+                    <option value="">{t('citizen.form.categorySelect')}</option>
+                    {COMPLAINT_CATEGORIES.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {categoryLabel(t, option.value)}
+                      </option>
+                    ))}
+                  </Form.Select>
+                  <Form.Control.Feedback type="invalid">
+                    {errors.category && t(`citizen.form.errors.${errors.category}`)}
+                  </Form.Control.Feedback>
+                </Form.Group>
+
+                {/* 4. Urgency */}
+                <Form.Group className="mb-4" controlId="complaint-urgency">
+                  <Form.Label className="fw-bold">{t('citizen.form.urgencyLabel')}</Form.Label>
+                  <Form.Select
+                    name="urgency_level"
+                    value={formData.urgency_level}
+                    onChange={handleChange}
+                    style={TAP_TARGET}
+                  >
+                    <option value="low">{t('urgency.low')}</option>
+                    <option value="medium">{t('urgency.medium')}</option>
+                    <option value="high">{t('citizen.form.urgencyHigh')}</option>
+                  </Form.Select>
+                </Form.Group>
+
+                {/* 5. Description */}
+                <Form.Group className="mb-3" controlId="complaint-description">
+                  <Form.Label className="fw-bold">{t('citizen.form.descriptionLabel')}</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={4}
+                    name="description"
+                    maxLength={1000}
+                    placeholder={t('citizen.form.descriptionPlaceholder')}
+                    value={formData.description}
+                    onChange={handleChange}
+                  />
+                  <Form.Text className="text-muted">{formData.description.length}/1000</Form.Text>
+                </Form.Group>
+
+                {/* 6. Actions (sticky) */}
+                <div
+                  className="position-sticky bottom-0 bg-body border-top d-flex gap-2 py-3 mt-4"
+                  style={{ zIndex: 1020 }}
+                >
                   <Button
-                    variant="light"
+                    variant="outline-secondary"
+                    className="flex-fill"
+                    style={TAP_TARGET}
                     onClick={() => navigate('/citizen/complaints')}
                     disabled={isLoading}
                   >
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
-                  <Button variant="success" type="submit" disabled={isLoading}>
-                    {isLoading ? 'Submitting...' : 'Submit Complaint'}
+                  <Button
+                    variant="success"
+                    type="submit"
+                    className="flex-fill fw-bold"
+                    style={{ ...TAP_TARGET, flexGrow: 2 }}
+                    disabled={isLoading}
+                  >
+                    {isLoading ? (
+                      <>
+                        <Spinner size="sm" className="me-2" aria-hidden="true" />
+                        {t('citizen.form.submitting')}
+                      </>
+                    ) : (
+                      t('citizen.form.submit')
+                    )}
                   </Button>
                 </div>
               </Form>

@@ -1,12 +1,49 @@
 /* src/styles/index.css */
 
 :root {
+  /* theme tokens (light) */
+  --surface: #f4f7f5;
+  --text: #1f2d27;
+  --link-strong: #1e7e34;
+  --success-solid: #1e7e34;
+  --focus-ring: #1e7e34;
+  --thead-bg: #f8f9fa;
+  --thead-fg: #5b6b63;
+  --stat-icon-bg: #e6f4ea;
+  --stat-icon-fg: #1e7e34;
+  --card-header-bg: var(--bs-tertiary-bg);
+  --st-new-bg: #fff3cd; --st-new-fg: #7a5b00;
+  --st-assigned-bg: #e0e7ff; --st-assigned-fg: #3730a3;
+  --st-progress-bg: #cff4fc; --st-progress-fg: #055160;
+  --st-resolved-bg: #d1e7dd; --st-resolved-fg: #0f5132;
+  --st-rejected-bg: #f8d7da; --st-rejected-fg: #842029;
   --primary-color: #28a745;
   --secondary-color: #6c757d;
   --success-color: #28a745;
   --danger-color: #dc3545;
   --warning-color: #ffc107;
   --info-color: #17a2b8;
+}
+
+[data-bs-theme='dark'] {
+  --surface: #121a16;
+  --text: #e3ebe6;
+  --link-strong: #7ddc9b;
+  --success-solid: #1e7e34;
+  --focus-ring: #6fdc8c;
+  --thead-bg: #1c2621;
+  --thead-fg: #aebbb4;
+  --stat-icon-bg: #1f3a2b;
+  --stat-icon-fg: #6fdc8c;
+  --st-new-bg: #4d3b00; --st-new-fg: #ffe69c;
+  --st-assigned-bg: #2b2f6b; --st-assigned-fg: #c7d2fe;
+  --st-progress-bg: #04414d; --st-progress-fg: #9eeaf9;
+  --st-resolved-bg: #0f3d2a; --st-resolved-fg: #a3cfbb;
+  --st-rejected-bg: #58151c; --st-rejected-fg: #f1aeb5;
+  --bs-body-bg: #121a16;
+  --bs-tertiary-bg: #1c2621;
+  --auth-card-bg: #18221d;
+  color-scheme: dark;
 }
 
 * {
@@ -70,42 +107,28 @@ button:hover:not(:disabled) {
 }
 
 .text-success {
-  color: var(--primary-color) !important;
+  color: var(--link-strong) !important;
 }
 
+/* white text on #1e7e34 = 5.14:1 (the brighter #28a745 was only 3.1:1) */
 .bg-success {
-  background-color: var(--primary-color) !important;
+  background-color: var(--success-solid) !important;
 }
 
 .border-success {
   border-color: var(--primary-color) !important;
 }
 
-/* Alert Styles */
+/* Alert Styles (Bootstrap 5.3 subtle tokens adapt to both themes) */
 .alert {
   border-radius: 5px;
   border: none;
 }
 
-.alert-success {
-  background-color: #d4edda;
-  color: #155724;
-}
-
-.alert-danger {
-  background-color: #f8d7da;
-  color: #721c24;
-}
-
-.alert-warning {
-  background-color: #fff3cd;
-  color: #856404;
-}
-
-.alert-info {
-  background-color: #d1ecf1;
-  color: #0c5460;
-}
+.alert-success { background-color: var(--bs-success-bg-subtle); color: var(--bs-success-text-emphasis); }
+.alert-danger { background-color: var(--bs-danger-bg-subtle); color: var(--bs-danger-text-emphasis); }
+.alert-warning { background-color: var(--bs-warning-bg-subtle); color: var(--bs-warning-text-emphasis); }
+.alert-info { background-color: var(--bs-info-bg-subtle); color: var(--bs-info-text-emphasis); }
 
 /* Badge Styles */
 .badge {
@@ -117,7 +140,7 @@ button:hover:not(:disabled) {
 .progress {
   height: 1.5rem;
   border-radius: 5px;
-  background-color: #e9ecef;
+  background-color: var(--bs-secondary-bg);
 }
 
 .progress-bar {
@@ -128,7 +151,7 @@ button:hover:not(:disabled) {
 .form-control,
 .form-select {
   border-radius: 5px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--bs-border-color);
   transition: all 0.3s ease;
 }
 
@@ -140,7 +163,7 @@ button:hover:not(:disabled) {
 
 .form-label {
   font-weight: 600;
-  color: #333;
+  color: var(--bs-body-color);
   margin-bottom: 0.5rem;
 }
 
@@ -150,23 +173,15 @@ button:hover:not(:disabled) {
 }
 
 .table thead {
-  background-color: #f8f9fa;
   font-weight: 600;
 }
 
-.table-success thead {
-  background-color: var(--primary-color) !important;
-  color: white;
-}
-
-.table-primary thead {
-  background-color: #007bff !important;
-  color: white;
-}
-
-.table-info thead {
-  background-color: #17a2b8 !important;
-  color: white;
+/* One neutral header style for every table variant (colour is reserved for status) */
+.table:not(.table-dark) > thead > tr > th,
+.table:not(.table-dark) > thead > tr > td {
+  background-color: var(--thead-bg) !important;
+  color: var(--thead-fg) !important;
+  box-shadow: none !important;
 }
 
 .table tbody tr {
@@ -174,7 +189,7 @@ button:hover:not(:disabled) {
 }
 
 .table tbody tr:hover {
-  background-color: #f8f9fa;
+  background-color: var(--bs-tertiary-bg);
 }
 
 /* Spinner */
@@ -273,44 +288,83 @@ footer {
   height: 12px;
   background-color: var(--primary-color);
   border-radius: 50%;
-  border: 3px solid white;
+  border: 3px solid var(--bs-body-bg);
 }
 
 /* ===== UI refresh ===== */
 :root {
   --primary-dark: #1e7e34;
-  --surface: #f4f7f5;
   --radius: 12px;
 }
 
-body { background: var(--surface); color: #1f2d27; }
-
-.navbar.bg-success { background: linear-gradient(90deg, #1e7e34, #28a745) !important; }
-.navbar-dark .navbar-nav .nav-link { border-radius: 8px; margin: 0 2px; padding: 0.5rem 0.9rem; }
-.navbar-dark .navbar-nav .nav-link.active { background: rgba(255, 255, 255, 0.18); color: #fff !important; }
+body { background: var(--surface); color: var(--text); }
 
 .card { border-radius: var(--radius); }
 .card-header:first-child { border-radius: var(--radius) var(--radius) 0 0; }
+
+/* Neutral card headers app-wide: pages use bg-success/bg-info/bg-primary/bg-dark + text-white
+   (and one inline green style); override them all so colour is reserved for status. */
+.card > .card-header,
+.card > .card-header.bg-success,
+.card > .card-header.bg-info,
+.card > .card-header.bg-primary,
+.card > .card-header.bg-dark,
+.card > .card-header.bg-warning,
+.card > .card-header.bg-danger,
+.card > .card-header.bg-secondary,
+.card > .card-header[style] {
+  background: var(--card-header-bg) !important;
+  background-color: var(--card-header-bg) !important;
+  color: var(--bs-body-color) !important;
+  border-bottom: 1px solid var(--bs-border-color) !important;
+  font-weight: 600;
+}
+
+.card > .card-header .card-title,
+.card > .card-header h1,
+.card > .card-header h2,
+.card > .card-header h3,
+.card > .card-header h4,
+.card > .card-header h5,
+.card > .card-header h6,
+.card > .card-header .text-white,
+.card > .card-header .text-light,
+.card > .card-header i {
+  color: inherit !important;
+}
+
+.card > .card-header .btn-outline-light {
+  color: var(--bs-body-color);
+  border-color: var(--bs-border-color);
+}
+
+/* react-hot-toast uses inline colours; follow the theme */
+.app-toast {
+  background: var(--bs-body-bg) !important;
+  color: var(--bs-body-color) !important;
+  border: 1px solid var(--bs-border-color);
+  max-width: min(92vw, 420px) !important;
+}
 .btn { border-radius: 8px; }
 
-:focus-visible { outline: 3px solid rgba(40, 167, 69, 0.55); outline-offset: 2px; }
+:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 .stat-card { border: 0; box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08); }
 .stat-icon {
   width: 48px; height: 48px; border-radius: 12px;
   display: flex; align-items: center; justify-content: center;
-  background: #e6f4ea; color: var(--primary-dark); font-size: 1.2rem;
+  background: var(--stat-icon-bg); color: var(--stat-icon-fg); font-size: 1.2rem;
 }
 
 /* Status badges */
 .badge[class*='status-'] { text-transform: capitalize; font-weight: 600; }
-.status-new, .status-pending { background: #fff3cd; color: #7a5b00; }
-.status-assigned { background: #e0e7ff; color: #3730a3; }
-.status-in_progress { background: #cff4fc; color: #055160; }
-.status-resolved { background: #d1e7dd; color: #0f5132; }
-.status-rejected { background: #f8d7da; color: #842029; }
+.status-new, .status-pending { background: var(--st-new-bg); color: var(--st-new-fg); }
+.status-assigned { background: var(--st-assigned-bg); color: var(--st-assigned-fg); }
+.status-in_progress { background: var(--st-progress-bg); color: var(--st-progress-fg); }
+.status-resolved { background: var(--st-resolved-bg); color: var(--st-resolved-fg); }
+.status-rejected { background: var(--st-rejected-bg); color: var(--st-rejected-fg); }
 
-.table thead th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; color: #5b6b63; }
+.table thead th { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.04em; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { transition: none !important; animation: none !important; }
@@ -318,5 +372,47 @@ body { background: var(--surface); color: #1f2d27; }
 }
 
 /* Accessibility: skip link + non-visible focus target */
-.skip-link { position: absolute; left: 8px; top: 8px; z-index: 2000; padding: 8px 14px; background: #fff; color: #1e7e34; border-radius: 4px; }
+.skip-link { position: absolute; left: 8px; top: 8px; z-index: 2000; padding: 8px 14px; background: var(--bs-body-bg); color: var(--link-strong); border: 2px solid var(--focus-ring); border-radius: 4px; }
 #main-content:focus { outline: none; }
+
+/* Bootstrap quirk: the absolutely-positioned .visually-hidden table caption can overflow
+   .table-responsive and add a stray scrollbar. Anchor it inside the wrapper. */
+.table-responsive { position: relative; }
+
+/* Keep toasts clear of sticky action bars on small screens */
+@media (max-width: 576px) {
+  .app-toast { font-size: 0.9rem; }
+}
+
+/* ---- Dark-mode contrast for outline buttons (Bootstrap's defaults are too dim on dark) ---- */
+[data-bs-theme='dark'] .btn-outline-secondary {
+  --bs-btn-color: #adb5bd;
+  --bs-btn-border-color: #6c757d;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #495057;
+  --bs-btn-hover-border-color: #6c757d;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #495057;
+}
+[data-bs-theme='dark'] .btn-outline-success {
+  --bs-btn-color: #6fdc8c;
+  --bs-btn-border-color: #2f8f4b;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #1e7e34;
+  --bs-btn-hover-border-color: #1e7e34;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #1e7e34;
+}
+[data-bs-theme='dark'] .btn-outline-primary {
+  --bs-btn-color: #6ea8fe;
+  --bs-btn-border-color: #3d7de0;
+  --bs-btn-hover-color: #fff;
+  --bs-btn-hover-bg: #0d6efd;
+  --bs-btn-hover-border-color: #0d6efd;
+  --bs-btn-active-color: #fff;
+  --bs-btn-active-bg: #0d6efd;
+}
+[data-bs-theme='dark'] .text-muted { color: #a9b3ad !important; }
+
+/* Map attribution: keep it small so it does not cover the map on phones */
+.leaflet-control-attribution { font-size: 10px !important; line-height: 1.3; }

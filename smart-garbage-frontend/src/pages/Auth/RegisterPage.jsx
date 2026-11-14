@@ -5,6 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../context/AuthContext';
+import { useTranslation } from '../../i18n/LanguageContext';
 import './Auth.css';
 
 function RegisterPage() {
@@ -18,14 +19,16 @@ function RegisterPage() {
   const [generalError, setGeneralError] = useState('');
 
   const { login } = useAuth();
+  const { t } = useTranslation();
   const navigate = useNavigate();
 
   const validateForm = () => {
     const newErrors = {};
-    if (!formData.email) newErrors.email = 'Email is required';
-    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'Email is invalid';
-    if (!formData.password) newErrors.password = 'Password is required';
-    else if (formData.password.length < 6) newErrors.password = 'Password must be at least 6 characters';
+    // Errors hold catalog keys and are translated at render, so they follow a language switch.
+    if (!formData.email) newErrors.email = 'auth.errors.emailRequired';
+    else if (!/\S+@\S+\.\S+/.test(formData.email)) newErrors.email = 'auth.errors.emailInvalid';
+    if (!formData.password) newErrors.password = 'auth.errors.passwordRequired';
+    else if (formData.password.length < 6) newErrors.password = 'auth.errors.passwordTooShort';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -48,7 +51,7 @@ function RegisterPage() {
         password: formData.password,
       });
 
-      toast.success('Registration successful! Logging you in...');
+      toast.success(t('auth.register.success'));
 
       // Auto-login after registration
       const loginResponse = await apiClient.post('/auth/login', {
@@ -61,7 +64,7 @@ function RegisterPage() {
 
       navigate(role === 'citizen' ? '/citizen/dashboard' : '/login');
     } catch (error) {
-      const errorMsg = error.response?.data?.error || 'Registration failed. Please try again.';
+      const errorMsg = error.response?.data?.error || t('auth.register.failed'); // server messages are shown as returned (English)
       setGeneralError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -75,41 +78,41 @@ function RegisterPage() {
         <Card.Body className="p-5">
           <div className="text-center mb-4">
             <i className="fas fa-trash text-success" style={{ fontSize: '3rem' }}></i>
-            <h2 className="mt-3 fw-bold">Create Account</h2>
-            <p className="text-muted">Join Smart Garbage System</p>
+            <h2 className="mt-3 fw-bold">{t('auth.register.title')}</h2>
+            <p className="text-muted">{t('auth.register.subtitle')}</p>
           </div>
 
           {generalError && <Alert variant="danger">{generalError}</Alert>}
 
           <Form onSubmit={handleSubmit}>
             <Form.Group className="mb-3">
-              <Form.Label>Email Address</Form.Label>
+              <Form.Label>{t('auth.emailLabel')}</Form.Label>
               <Form.Control
                 type="email"
                 name="email"
-                placeholder="Enter your email"
+                placeholder={t('auth.emailPlaceholder')}
                 value={formData.email}
                 onChange={handleChange}
                 isInvalid={!!errors.email}
               />
-              <Form.Control.Feedback type="invalid">{errors.email}</Form.Control.Feedback>
+              <Form.Control.Feedback type="invalid">{errors.email && t(errors.email)}</Form.Control.Feedback>
             </Form.Group>
 
             <Form.Group className="mb-3">
-              <Form.Label>Password</Form.Label>
+              <Form.Label>{t('auth.passwordLabel')}</Form.Label>
               <Form.Control
                 type="password"
                 name="password"
-                placeholder="Create a password"
+                placeholder={t('auth.register.passwordPlaceholder')}
                 value={formData.password}
                 onChange={handleChange}
                 isInvalid={!!errors.password}
               />
-              <Form.Control.Feedback type="invalid">{errors.password}</Form.Control.Feedback>
+              <Form.Control.Feedback type="invalid">{errors.password && t(errors.password)}</Form.Control.Feedback>
             </Form.Group>
 
             <p className="small text-muted mb-4">
-              <i className="fas fa-user me-1"></i> Accounts are created for citizens. Officer and admin accounts are issued by your municipality administrator.
+              <i className="fas fa-user me-1"></i> {t('auth.register.note')}
             </p>
 
             <Button
@@ -118,7 +121,7 @@ function RegisterPage() {
               className="w-100 py-2 fw-bold"
               disabled={isLoading}
             >
-              {isLoading ? 'Creating Account...' : 'Create Account'}
+              {isLoading ? t('auth.register.submitting') : t('auth.register.submit')}
             </Button>
           </Form>
 
@@ -126,9 +129,9 @@ function RegisterPage() {
 
           <div className="text-center">
             <p className="small text-muted">
-              Already have an account?{' '}
+              {t('auth.haveAccount')}{' '}
               <Link to="/login" className="text-success fw-bold">
-                Login here
+                {t('auth.loginHere')}
               </Link>
             </p>
           </div>

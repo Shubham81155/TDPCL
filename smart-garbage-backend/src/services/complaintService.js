@@ -76,10 +76,11 @@ const getComplaintById = async (complaintId) => {
         c.status, c.resolution_description, c.resolution_image_path,
         c.created_at, c.assigned_at, c.started_at, c.resolved_at,
         u.name as citizen_name, u.email as citizen_email, u.phone as citizen_phone,
-        o.user_id as officer_user_id
+        o.user_id as officer_user_id, ou.name as assigned_officer
        FROM complaints c
        LEFT JOIN users u ON c.user_id = u.user_id
        LEFT JOIN officers o ON c.assigned_officer_id = o.officer_id
+       LEFT JOIN users ou ON o.user_id = ou.user_id
        WHERE c.complaint_id = $1`,
       [complaintId]
     );
@@ -130,6 +131,33 @@ const countComplaintsByUser = async (userId, filters = {}) => {
     return await countRows(`complaints c WHERE ${f.where}`, f.params);
   } catch (error) {
     throw AppError.wrap(error, 'Failed to count complaints');
+  }
+};
+
+// Counts of a citizen's complaints by status group, as numbers (one aggregate query)
+const getComplaintSummaryByUser = async (userId) => {
+  try {
+    const row = await db.one(
+      `SELECT
+        COUNT(*)::int AS total,
+        (COUNT(*) FILTER (WHERE status IN ('new', 'pending', 'assigned')))::int AS pending,
+        (COUNT(*) FILTER (WHERE status = 'in_progress'))::int AS in_progress,
+        (COUNT(*) FILTER (WHERE status = 'resolved'))::int AS resolved,
+        (COUNT(*) FILTER (WHERE status = 'rejected'))::int AS rejected
+       FROM complaints
+       WHERE user_id = $1`,
+      [userId]
+    );
+    const n = (v) => Number(v) || 0;
+    return {
+      total: n(row.total),
+      pending: n(row.pending),
+      in_progress: n(row.in_progress),
+      resolved: n(row.resolved),
+      rejected: n(row.rejected),
+    };
+  } catch (error) {
+    throw AppError.wrap(error, 'Failed to get complaint summary');
   }
 };
 
@@ -383,6 +411,7 @@ module.exports = {
   getComplaintById,
   getComplaintsByUser,
   countComplaintsByUser,
+  getComplaintSummaryByUser,
   getOfficerComplaints,
   getAssignedComplaintsForUser,
   updateComplaintStatus,

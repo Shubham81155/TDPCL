@@ -5,6 +5,7 @@ import { toastOnError } from './queryUtils';
 
 export const complaintKeys = {
   mine: ['complaints', 'mine'],
+  summary: ['complaints', 'summary'],
   assigned: ['complaints', 'assigned'],
   admin: ['admin', 'complaints'],
   officers: ['admin', 'active-officers'],
@@ -16,6 +17,22 @@ export const useMyComplaints = (opts = {}) =>
     complaintKeys.mine,
     async () => (await apiClient.get('/complaints')).data.data || [],
     { staleTime: 0, onError: toastOnError('Failed to load complaints'), ...opts }
+  );
+
+// Server-side counts for the citizen dashboard (not capped by the list's page size).
+// Resolves to null when the endpoint is unavailable so callers can fall back to the loaded list.
+export const useMyComplaintSummary = (opts = {}) =>
+  useQuery(
+    complaintKeys.summary,
+    async () => {
+      try {
+        const s = (await apiClient.get('/complaints/summary')).data?.summary;
+        return s && typeof s === 'object' ? s : null;
+      } catch (e) {
+        return null;
+      }
+    },
+    { staleTime: 0, ...opts }
   );
 
 // Officer's assigned complaints

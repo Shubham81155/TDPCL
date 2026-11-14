@@ -43,18 +43,18 @@ it('falls back when model or script is missing', async () => {
 });
 
 it('returns normalised model output', async () => {
-  spawn.mockReturnValue(fakeChild({ stdout: JSON.stringify({ label: 'Plastic Bottle', category: 'Plastic Bottle!', confidence: '0.9' }) }));
+  spawn.mockReturnValue(fakeChild({ stdout: JSON.stringify({ label: 'Plastic Bottle', category: 'Plastic Bottle!', confidence: 0.9 }) }));
   const r = await classifyGarbageImage(Buffer.from('x'), 'pic.png');
   expect(r).toEqual({ label: 'Plastic Bottle', category: 'plastic_bottle', confidence: 0.9, source: 'model' });
   expect(fs.promises.writeFile.mock.calls[0][0]).toMatch(/\.png$/);
   expect(fs.promises.unlink).toHaveBeenCalled();
 });
 
-it('uses label for category and defaults when output sparse', async () => {
+it('rejects sparse/invalid output (strict validation)', async () => {
   spawn.mockReturnValueOnce(fakeChild({ stdout: JSON.stringify({ label: 'Glass' }) }));
-  expect(await classifyGarbageImage(Buffer.from('x'))).toMatchObject({ category: 'glass', confidence: 0 });
+  expect(await classifyGarbageImage(Buffer.from('x'))).toMatchObject({ source: 'fallback' });
   spawn.mockReturnValueOnce(fakeChild({ stdout: '{}' }));
-  expect(await classifyGarbageImage(Buffer.from('x'))).toMatchObject({ label: 'Unclassified', category: 'unclassified' });
+  expect(await classifyGarbageImage(Buffer.from('x'))).toMatchObject({ label: 'Unclassified', category: 'unclassified', source: 'fallback' });
 });
 
 it.each([

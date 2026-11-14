@@ -4,6 +4,8 @@ import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
+import useDateRange, { describeRange } from '../../hooks/useDateRange';
+import DateRangeFilter from '../../components/admin/DateRangeFilter';
 import { useAdminStats } from '../../hooks/useAdminStats';
 import { errorMessage } from '../../hooks/queryUtils';
 import StatCard from '../../components/common/StatCard';
@@ -27,7 +29,8 @@ const STATUS_META = [
 ];
 
 function AdminDashboard() {
-  const { data: stats, isLoading, error: queryError, refetch } = useAdminStats();
+  const range = useDateRange();
+  const { data: stats, isLoading, error: queryError, refetch } = useAdminStats(range.params);
   const error = queryError ? errorMessage(queryError, 'Failed to load statistics') : null;
 
   const data = useMemo(() => {
@@ -55,7 +58,7 @@ function AdminDashboard() {
         data: data.statuses.map((s) => s.value),
         backgroundColor: data.statuses.map((s) => s.color),
         borderWidth: 2,
-        borderColor: '#fff',
+        borderColor: 'rgba(128,128,128,0.4)',
       },
     ],
   };
@@ -81,7 +84,19 @@ function AdminDashboard() {
             <i className="fas fa-chart-line me-2" style={{ color: '#28a745' }} aria-hidden="true"></i>
             Admin Dashboard
           </h2>
-          <p className="text-muted mb-0">System-wide statistics and overview</p>
+          <p className="text-muted mb-2">
+            System-wide statistics and overview
+            <span className="ms-2 badge text-bg-secondary" data-testid="active-range">
+              {describeRange(range.from, range.to)}
+            </span>
+          </p>
+          <DateRangeFilter
+            idPrefix="dash-range"
+            from={range.from}
+            to={range.to}
+            setRange={range.setRange}
+            clear={range.clear}
+          />
         </Col>
       </Row>
 
@@ -143,12 +158,12 @@ function AdminDashboard() {
           <Row className="g-3">
             <Col lg={7}>
               <Card className="border-0 shadow-sm h-100">
-                <Card.Header className="text-white" style={{ background: '#28a745' }}>
+                <Card.Header className="bg-body-tertiary">
                   <Card.Title className="mb-0 h5">Status Distribution</Card.Title>
                 </Card.Header>
                 <Card.Body>
                   {chartTotal === 0 ? (
-                    <p className="text-muted text-center my-5">No complaints yet.</p>
+                    <p className="text-muted text-center my-5">{range.from || range.to ? 'No complaints in this range.' : 'No complaints yet.'}</p>
                   ) : (
                     <>
                       <div style={{ position: 'relative', height: 300 }}>
@@ -169,12 +184,15 @@ function AdminDashboard() {
             </Col>
             <Col lg={5}>
               <Card className="border-0 shadow-sm h-100">
-                <Card.Header className="text-white" style={{ background: '#1e7e34' }}>
+                <Card.Header className="bg-body-tertiary">
                   <Card.Title className="mb-0 h5">Quick Links</Card.Title>
                 </Card.Header>
                 <Card.Body className="d-grid gap-2 align-content-start">
                   <Button as={Link} to="/admin/complaints" variant="success">
                     <i className="fas fa-tasks me-2" aria-hidden="true"></i>Manage Complaints
+                  </Button>
+                  <Button as={Link} to="/admin/map" variant="outline-success">
+                    <i className="fas fa-map-marked-alt me-2" aria-hidden="true"></i>View map
                   </Button>
                   <Button as={Link} to="/admin/officers" variant="outline-success">
                     <i className="fas fa-users me-2" aria-hidden="true"></i>Manage Officers

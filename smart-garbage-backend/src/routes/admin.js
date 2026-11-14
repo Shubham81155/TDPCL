@@ -7,30 +7,32 @@ const complaintService = require('../services/complaintService');
 const adminService = require('../services/adminService');
 const AppError = require('../utils/AppError');
 const { verifyToken, checkRole } = require('../middleware/auth');
-const { parsePagination, parseOptionalInt, parseOptionalDate } = require('../utils/pagination');
+const { parsePagination, parseOptionalInt, parseOptionalDate, parseDateRange } = require('../utils/pagination');
 
-// Get complaints statistics (Admin)
+const COMPLAINT_STATUSES = ['new', 'assigned', 'pending', 'in_progress', 'resolved', 'rejected'];
+
+// Get complaints statistics (Admin); optional dateFrom/dateTo
 router.get('/stats/complaints', verifyToken, checkRole('admin'), async (req, res) => {
-  const stats = await adminService.getComplaintStats();
+  const stats = await adminService.getComplaintStats(parseDateRange(req.query));
   res.json({ success: true, stats });
 });
 
 // Get complaints by category
 router.get('/stats/by-category', verifyToken, checkRole('admin'), async (req, res) => {
-  const stats = await adminService.getStatsByCategory();
+  const stats = await adminService.getStatsByCategory(parseDateRange(req.query));
   res.json({ success: true, data: stats });
 });
 
 // Get complaints by ward
 router.get('/stats/by-ward', verifyToken, checkRole('admin'), async (req, res) => {
-  const stats = await adminService.getStatsByWard();
+  const stats = await adminService.getStatsByWard(parseDateRange(req.query));
   res.json({ success: true, data: stats });
 });
 
 // Get officer performance leaderboard
 router.get('/stats/officer-performance', verifyToken, checkRole('admin'), async (req, res) => {
   const { limit } = parsePagination(req.query, { defaultLimit: 10, maxLimit: 100 });
-  const stats = await adminService.getOfficerPerformance(limit);
+  const stats = await adminService.getOfficerPerformance(limit, parseDateRange(req.query));
   res.json({ success: true, data: stats });
 });
 
@@ -62,7 +64,26 @@ router.get('/complaints', verifyToken, checkRole('admin'), async (req, res) => {
   });
 });
 
-// Get complaint density heatmap data
+// Heatmap with optional filters (dateFrom, dateTo, status, category)
+router.get('/heatmap', verifyToken, checkRole('admin'), async (req, res) => {
+  const { dateFrom, dateTo } = parseDateRange(req.query);
+  const { status, category } = req.query;
+  if (status !== undefined && status !== '' && !COMPLAINT_STATUSES.includes(status)) {
+    throw new AppError('Invalid status', 400);
+  }
+  if (category !== undefined && (typeof category !== 'string' || !category.trim())) {
+    throw new AppError('Invalid category', 400);
+  }
+  const data = await adminService.getHeatmapData({
+    dateFrom,
+    dateTo,
+    status: status || null,
+    category: category ? category.trim() : null,
+  });
+  res.json({ success: true, data });
+});
+
+// Get complaint density heatmap data (legacy, unfiltered)
 router.post('/heatmap', verifyToken, checkRole('admin'), async (req, res) => {
   const heatmapData = await adminService.getHeatmapData();
   res.json({ success: true, data: heatmapData });

@@ -3,6 +3,7 @@ jest.mock('../../../src/utils/s3Upload', () => ({ uploadToS3: jest.fn() }));
 jest.mock('../../../src/utils/logger', () => ({ warn: jest.fn(), info: jest.fn(), error: jest.fn(), debug: jest.fn() }));
 jest.mock('../../../src/services/complaintService', () => ({ createComplaint: jest.fn() }));
 jest.mock('../../../src/services/assignmentService', () => ({ autoAssignComplaint: jest.fn() }));
+jest.mock('../../../src/services/classificationService', () => ({ scheduleClassification: jest.fn() }));
 jest.mock('../../../src/services/wardService', () => ({ getWardByCoordinates: jest.fn() }));
 jest.mock('../../../src/services/notificationService', () => ({
   sendComplaintSubmittedEmail: jest.fn(),
@@ -16,6 +17,7 @@ const logger = require('../../../src/utils/logger');
 const complaintService = require('../../../src/services/complaintService');
 const assignmentService = require('../../../src/services/assignmentService');
 const wardService = require('../../../src/services/wardService');
+const { scheduleClassification } = require('../../../src/services/classificationService');
 const notify = require('../../../src/services/notificationService');
 const svc = require('../../../src/services/complaintSubmissionService');
 
@@ -138,6 +140,21 @@ describe('submitComplaint', () => {
     const r = await svc.submitComplaint({ user, body: body(), file });
     expect(r).toEqual({ ...complaint, assigned: false });
     expect(console.error).toHaveBeenCalledWith('Email error (non-blocking):', 'sync');
+  });
+
+  it('schedules advisory classification after creation without altering the category or result', async () => {
+    const assignment = { complaint_id: 11, status: 'assigned' };
+    assignmentService.autoAssignComplaint.mockResolvedValue(assignment);
+    const r = await svc.submitComplaint({ user, body: body(), file });
+    expect(r).toBe(assignment);
+    expect(scheduleClassification).toHaveBeenCalledWith({ complaintId: 11, buffer: file.buffer, fileName: 'a.jpg' });
+    expect(complaintService.createComplaint).toHaveBeenCalledWith(expect.objectContaining({ category: 'plastics' }));
+  });
+
+  it('does not schedule classification when creation fails', async () => {
+    complaintService.createComplaint.mockRejectedValueOnce(new Error('db'));
+    await expect(svc.submitComplaint({ user, body: body(), file })).rejects.toThrow('db');
+    expect(scheduleClassification).not.toHaveBeenCalled();
   });
 
   it('upload and create failures propagate', async () => {

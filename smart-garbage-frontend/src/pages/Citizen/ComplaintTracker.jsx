@@ -1,11 +1,17 @@
 // src/pages/Citizen/ComplaintTracker.jsx
 import React, { useState, useMemo, useEffect } from 'react';
-import { Container, Row, Col, Card, Table, Badge, Button, Form, Spinner, Pagination } from 'react-bootstrap';
+import { Container, Row, Col, Card, Table, Button, Form, Pagination } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMyComplaints } from '../../hooks/useComplaints';
-import { COMPLAINT_CATEGORIES, formatComplaintCategory } from '../../utils/classificationUtils';
+import LoadingState from '../../components/common/LoadingState';
+import EmptyState from '../../components/common/EmptyState';
+import StatusBadge, { UrgencyBadge } from '../../components/common/StatusBadge';
+import { COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
+import { useTranslation } from '../../i18n/LanguageContext';
+import { categoryLabel } from '../../i18n/labels';
 
 function ComplaintTracker() {
+  const { t, formatDate } = useTranslation();
   const [filters, setFilters] = useState({ status: '', category: '' });
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
@@ -28,27 +34,6 @@ function ComplaintTracker() {
     setFilters((prev) => ({ ...prev, [name]: value }));
   };
 
-  const getStatusBadge = (status) => {
-    const variants = {
-      new: 'primary',
-      assigned: 'info',
-      pending: 'warning',
-      in_progress: 'primary',
-      resolved: 'success',
-      rejected: 'danger',
-    };
-    return <Badge bg={variants[status] || 'secondary'}>{status.replace('_', ' ').toUpperCase()}</Badge>;
-  };
-
-  const getUrgencyBadge = (urgency) => {
-    const variants = {
-      low: 'success',
-      medium: 'warning',
-      high: 'danger',
-    };
-    return <Badge bg={variants[urgency] || 'secondary'}>{urgency.toUpperCase()}</Badge>;
-  };
-
   const paginatedComplaints = filteredComplaints.slice((currentPage - 1) * pageSize, currentPage * pageSize);
   const totalPages = Math.ceil(filteredComplaints.length / pageSize);
 
@@ -58,15 +43,15 @@ function ComplaintTracker() {
         <Col>
           <h2 className="fw-bold mb-2">
             <i className="fas fa-list me-2 text-success"></i>
-            My Complaints
+            {t('nav.myComplaints')}
           </h2>
-          <p className="text-muted">Track all your reported issues and their status</p>
+          <p className="text-muted">{t('citizen.tracker.subtitle')}</p>
         </Col>
         <Col md="auto">
           <Link to="/citizen/complaint/new">
             <Button variant="success">
               <i className="fas fa-plus me-2"></i>
-              Report New Issue
+              {t('common.reportNewIssue')}
             </Button>
           </Link>
         </Col>
@@ -77,35 +62,35 @@ function ComplaintTracker() {
           <Row>
             <Col md={6}>
               <Form.Group>
-                <Form.Label className="small fw-bold">Filter by Status</Form.Label>
+                <Form.Label className="small fw-bold">{t('common.filterByStatus')}</Form.Label>
                 <Form.Select
                   name="status"
                   value={filters.status}
                   onChange={handleFilterChange}
                   size="sm"
                 >
-                  <option value="">All Status</option>
-                  <option value="new">New</option>
-                  <option value="assigned">Assigned</option>
-                  <option value="in_progress">In Progress</option>
-                  <option value="resolved">Resolved</option>
-                  <option value="rejected">Rejected</option>
+                  <option value="">{t('common.allStatus')}</option>
+                  <option value="new">{t('status.new')}</option>
+                  <option value="assigned">{t('status.assigned')}</option>
+                  <option value="in_progress">{t('status.in_progress')}</option>
+                  <option value="resolved">{t('status.resolved')}</option>
+                  <option value="rejected">{t('status.rejected')}</option>
                 </Form.Select>
               </Form.Group>
             </Col>
             <Col md={6}>
               <Form.Group>
-                <Form.Label className="small fw-bold">Filter by Category</Form.Label>
+                <Form.Label className="small fw-bold">{t('citizen.tracker.filterCategory')}</Form.Label>
                 <Form.Select
                   name="category"
                   value={filters.category}
                   onChange={handleFilterChange}
                   size="sm"
                 >
-                  <option value="">All Categories</option>
+                  <option value="">{t('citizen.tracker.allCategories')}</option>
                   {COMPLAINT_CATEGORIES.map((option) => (
                     <option key={option.value} value={option.value}>
-                      {option.label}
+                      {categoryLabel(t, option.value)}
                     </option>
                   ))}
                 </Form.Select>
@@ -116,27 +101,38 @@ function ComplaintTracker() {
       </Card>
 
       {isLoading ? (
-        <div className="text-center py-5">
-          <Spinner animation="border" variant="success" />
-        </div>
+        <LoadingState variant="table" label={t('citizen.tracker.loading')} />
       ) : filteredComplaints.length === 0 ? (
-        <Alert variant="info">
-          <i className="fas fa-info-circle me-2"></i>
-          No complaints found. <Link to="/citizen/complaint/new">Report a new issue</Link>
-        </Alert>
+        <Card className="border-0 shadow-sm">
+          {(data || []).length === 0 ? (
+            <EmptyState
+              icon="clipboard-list"
+              title={t('citizen.tracker.emptyTitle')}
+              text={t('citizen.tracker.emptyNone')}
+              action={{ label: t('citizen.tracker.emptyNoneAction'), to: '/citizen/complaint/new', icon: 'plus' }}
+            />
+          ) : (
+            <EmptyState
+              icon="filter"
+              title={t('citizen.tracker.emptyTitle')}
+              text={t('citizen.tracker.emptyFiltered')}
+              action={{ label: t('citizen.tracker.clearFilters'), onClick: () => setFilters({ status: '', category: '' }), variant: 'outline-secondary' }}
+            />
+          )}
+        </Card>
       ) : (
         <>
           <Card className="border-0 shadow-lg">
             <Table responsive className="mb-0">
               <thead className="table-success">
                 <tr>
-                  <th>ID</th>
-                  <th>Title</th>
-                  <th>Category</th>
-                  <th>Urgency</th>
-                  <th>Status</th>
-                  <th>Submitted</th>
-                  <th>Action</th>
+                  <th>{t('common.id')}</th>
+                  <th>{t('common.title')}</th>
+                  <th className="d-none d-md-table-cell">{t('common.category')}</th>
+                  <th className="d-none d-md-table-cell">{t('citizen.tracker.urgency')}</th>
+                  <th>{t('common.status')}</th>
+                  <th className="d-none d-md-table-cell">{t('citizen.tracker.submitted')}</th>
+                  <th>{t('common.action')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -144,16 +140,16 @@ function ComplaintTracker() {
                   <tr key={complaint.complaint_id}>
                     <td className="fw-bold">#{complaint.complaint_id}</td>
                     <td>{complaint.title}</td>
-                    <td>{formatComplaintCategory(complaint.category)}</td>
-                    <td>{getUrgencyBadge(complaint.urgency_level)}</td>
-                    <td>{getStatusBadge(complaint.status)}</td>
-                    <td className="small text-muted">
-                      {new Date(complaint.created_at).toLocaleDateString()}
+                    <td className="d-none d-md-table-cell">{categoryLabel(t, complaint.category)}</td>
+                    <td className="d-none d-md-table-cell"><UrgencyBadge urgency={complaint.urgency_level} /></td>
+                    <td><StatusBadge status={complaint.status} /></td>
+                    <td className="small text-muted d-none d-md-table-cell">
+                      {formatDate(complaint.created_at)}
                     </td>
                     <td>
                       <Link to={`/citizen/complaint/${complaint.complaint_id}`}>
                         <Button variant="primary" size="sm">
-                          View
+                          {t('common.view')}
                         </Button>
                       </Link>
                     </td>
@@ -199,11 +195,5 @@ function ComplaintTracker() {
     </Container>
   );
 }
-
-const Alert = ({ variant, children }) => (
-  <div className={`alert alert-${variant}`} role="alert">
-    {children}
-  </div>
-);
 
 export default ComplaintTracker;

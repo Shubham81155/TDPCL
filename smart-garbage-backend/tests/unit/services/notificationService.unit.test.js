@@ -18,9 +18,14 @@ beforeEach(() => {
   mockSendMail.mockReset().mockResolvedValue({});
   db.none.mockResolvedValue();
   process.env.FRONTEND_URL = 'http://front.test';
+  process.env.EMAIL_USER = 'sender@real.test';
+  process.env.EMAIL_PASSWORD = 'app-pass';
+  process.env.SENDGRID_API_KEY = 'SG.real';
   svc = require('../../../src/services/notificationService');
 });
-afterEach(() => { delete process.env.EMAIL_SERVICE; });
+afterEach(() => {
+  ['EMAIL_SERVICE', 'EMAIL_USER', 'EMAIL_PASSWORD', 'SENDGRID_API_KEY', 'EMAIL_FROM'].forEach((k) => delete process.env[k]);
+});
 
 const html = () => mockSendMail.mock.calls[0][0].html;
 
@@ -45,12 +50,12 @@ describe('sendComplaintSubmittedEmail', () => {
     expect(html()).not.toContain('<script>');
     expect(mockSendMail.mock.calls[0][0]).toMatchObject({ to: 'a@b', subject: 'Complaint #5 Submitted Successfully' });
     expect(html()).toContain('http://front.test/citizen/complaint/5');
-    expect(db.none.mock.calls[0][0]).toContain("'sent'");
+    expect(db.none.mock.calls[0][1]).toEqual(['a@b', expect.any(String), 'sent', null]);
   });
   it('transport error is swallowed and failure is logged; log failure also swallowed', async () => {
     mockSendMail.mockRejectedValue(new Error('smtp down'));
     await expect(svc.sendComplaintSubmittedEmail('a@b', 'N', 1)).resolves.toBeUndefined();
-    expect(db.none.mock.calls[0][1]).toEqual(['a@b', 'smtp down']);
+    expect(db.none.mock.calls[0][1]).toEqual(['a@b', expect.any(String), 'failed', 'smtp down']);
     db.none.mockRejectedValue(new Error('db down'));
     await expect(svc.sendComplaintSubmittedEmail('a@b', 'N', 1)).resolves.toBeUndefined();
   });

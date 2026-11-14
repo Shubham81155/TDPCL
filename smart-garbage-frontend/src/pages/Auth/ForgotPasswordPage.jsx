@@ -4,9 +4,11 @@ import { Container, Form, Button, Card, Alert } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import apiClient from '../../services/api';
+import { useTranslation } from '../../i18n/LanguageContext';
 import './Auth.css';
 
 function ForgotPasswordPage() {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [submitted, setSubmitted] = useState(false);
@@ -17,7 +19,7 @@ function ForgotPasswordPage() {
     setError('');
 
     if (!email) {
-      setError('Please enter your email address');
+      setError(t('auth.forgot.emailRequired'));
       return;
     }
 
@@ -27,8 +29,8 @@ function ForgotPasswordPage() {
       setSubmitted(true);
     } catch (err) {
       const msg = err.response?.status === 429
-        ? 'Too many attempts. Please try again later.'
-        : 'Failed to process request. Please try again.';
+        ? t('auth.forgot.tooMany')
+        : t('auth.forgot.failed');
       setError(msg);
       toast.error(msg);
     } finally {
@@ -42,8 +44,8 @@ function ForgotPasswordPage() {
         <Card.Body className="p-5">
           <div className="text-center mb-4">
             <i className="fas fa-lock text-warning" style={{ fontSize: '3rem' }}></i>
-            <h2 className="mt-3 fw-bold">Reset Password</h2>
-            <p className="text-muted">Enter your email to receive reset instructions</p>
+            <h2 className="mt-3 fw-bold">{t('auth.forgot.title')}</h2>
+            <p className="text-muted">{t('auth.forgot.subtitle')}</p>
           </div>
 
           {error && <Alert variant="danger">{error}</Alert>}
@@ -51,10 +53,10 @@ function ForgotPasswordPage() {
           {!submitted ? (
             <Form onSubmit={handleSubmit}>
               <Form.Group className="mb-4">
-                <Form.Label>Email Address</Form.Label>
+                <Form.Label>{t('auth.emailLabel')}</Form.Label>
                 <Form.Control
                   type="email"
-                  placeholder="Enter your email"
+                  placeholder={t('auth.emailPlaceholder')}
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                 />
@@ -66,13 +68,13 @@ function ForgotPasswordPage() {
                 className="w-100 py-2 fw-bold"
                 disabled={isLoading}
               >
-                {isLoading ? 'Sending...' : 'Send Reset Link'}
+                {isLoading ? t('auth.forgot.sending') : t('auth.forgot.submit')}
               </Button>
             </Form>
           ) : (
             <Alert variant="success" className="text-center">
-              <h5 className="mb-3">Check Your Email!</h5>
-              <p>If an account exists for that email, we've sent password reset instructions. Please check your inbox (the link expires in 1 hour).</p>
+              <h5 className="mb-3">{t('auth.forgot.sentTitle')}</h5>
+              <p>{t('auth.forgot.sentText')}</p>
             </Alert>
           )}
 
@@ -80,15 +82,15 @@ function ForgotPasswordPage() {
 
           <div className="text-center">
             <p className="small text-muted">
-              Remember your password?{' '}
+              {t('auth.forgot.remember')}{' '}
               <Link to="/login" className="text-success fw-bold">
-                Login here
+                {t('auth.loginHere')}
               </Link>
             </p>
             <p className="small text-muted">
-              Don't have an account?{' '}
+              {t('auth.noAccount')}{' '}
               <Link to="/register" className="text-success fw-bold">
-                Register here
+                {t('auth.registerHere')}
               </Link>
             </p>
           </div>

@@ -1,8 +1,10 @@
 // src/pages/Admin/Officers.jsx
 import React, { useState, useEffect } from 'react';
-import { Container, Table, Button, Form, Modal, Alert, Row, Col, Card, Spinner } from 'react-bootstrap';
+import { Container, Table, Button, Form, Modal, Alert, Row, Col, Card } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
+import LoadingState from '../../components/common/LoadingState';
+import EmptyState from '../../components/common/EmptyState';
 import { queryClient } from '../../queryClient';
 
 function AdminOfficers() {
@@ -164,14 +166,22 @@ function AdminOfficers() {
 
       {/* Officers Table */}
       {loading ? (
-        <div className="text-center py-5">
-          <Spinner animation="border" className="text-success" />
-        </div>
+        <LoadingState variant="table" label="Loading officers" />
       ) : filteredOfficers.length === 0 ? (
-        <Alert variant="info">
-          <i className="fas fa-info-circle me-2"></i>
-          No officers found. Add your first officer to get started!
-        </Alert>
+        officers.length === 0 ? (
+          <EmptyState
+            icon="user-shield"
+            title="No officers yet"
+            text="No officers found. Add your first officer to get started!"
+            action={{ label: 'Add your first officer', onClick: () => setShowModal(true), icon: 'plus' }}
+            className="py-4"
+          />
+        ) : (
+          <Alert variant="info">
+            <i className="fas fa-info-circle me-2"></i>
+            No officers match your search.
+          </Alert>
+        )
       ) : (
         <div className="table-responsive">
           <Table hover className="border-0 shadow-sm">
@@ -198,10 +208,20 @@ function AdminOfficers() {
                         officer.status === 'active'
                           ? 'bg-success'
                           : officer.status === 'on_leave'
-                          ? 'bg-warning'
+                          ? 'bg-warning text-dark'
                           : 'bg-danger'
                       }`}
                     >
+                      <i
+                        className={`fa-solid me-1 ${
+                          officer.status === 'active'
+                            ? 'fa-circle-check'
+                            : officer.status === 'on_leave'
+                            ? 'fa-clock'
+                            : 'fa-circle-xmark'
+                        }`}
+                        aria-hidden="true"
+                      ></i>
                       {officer.status}
                     </span>
                   </td>
@@ -209,9 +229,10 @@ function AdminOfficers() {
                     <Button
                       variant="danger"
                       size="sm"
+                      aria-label={`Delete officer ${officer.email}`}
                       onClick={() => handleDeleteOfficer(officer.officer_id)}
                     >
-                      <i className="fas fa-trash"></i>
+                      <i className="fas fa-trash" aria-hidden="true"></i>
                     </Button>
                   </td>
                 </tr>
