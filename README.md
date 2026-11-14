@@ -77,6 +77,21 @@ The app calls `http://localhost:5000/api` by default. Set `REACT_APP_API_URL` to
 
 Citizens self-register through the app. Self-registration always creates a **citizen**; officers are created by an admin (**Officers** page) and admins directly in the database.
 
+## Run with Docker
+
+```bash
+cp .env.docker.example .env      # set JWT_SECRET and DB_PASSWORD
+docker compose up --build        # app on http://localhost:3000, API on http://localhost:5000
+```
+
+Compose starts PostGIS, the API (it applies migrations on start) and the frontend behind nginx. Development seed data is skipped when `NODE_ENV=production`. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) for the production checklist.
+
+## Health checks and logging
+
+- `GET /health`: the process is up. `GET /health/ready`: the database is reachable (503 otherwise).
+- Each request is logged as one JSON line with a `requestId` (also returned as `X-Request-Id`). Set `LOG_LEVEL` (`error`, `warn`, `info`, `debug`).
+- `FRONTEND_URL` is the CORS allowlist and may hold several comma-separated origins. Set `TRUST_PROXY` when running behind a reverse proxy so rate limiting sees real client IPs.
+
 ## Running the tests
 
 ```bash
@@ -117,12 +132,13 @@ All routes are under `/api` and use `Authorization: Bearer <accessToken>` except
 
 ## Known limitations
 
-- The ward duplicate-name check is application-level, so two simultaneous requests could both pass it.
 - Wards are created from a bounding box or pasted GeoJSON; there is no map drawing tool.
 - Officers can be created, but there is no screen to assign an officer to a ward.
 
 ## Documentation
 
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): design decisions, layering and next steps
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Docker Compose and production checklist
 - [docs/SRS.md](docs/SRS.md): requirements
 - [docs/ER_DIAGRAM.md](docs/ER_DIAGRAM.md): database design
 - [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md): API reference

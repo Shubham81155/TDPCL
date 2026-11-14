@@ -1,52 +1,27 @@
 // src/pages/Citizen/ComplaintTracker.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Container, Row, Col, Card, Table, Badge, Button, Form, Spinner, Pagination } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import apiClient from '../../services/api';
-import toast from 'react-hot-toast';
+import { useMyComplaints } from '../../hooks/useComplaints';
 import { COMPLAINT_CATEGORIES, formatComplaintCategory } from '../../utils/classificationUtils';
 
 function ComplaintTracker() {
-  const [complaints, setComplaints] = useState([]);
-  const [filteredComplaints, setFilteredComplaints] = useState([]);
   const [filters, setFilters] = useState({ status: '', category: '' });
-  const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
+  const { data, isLoading } = useMyComplaints();
+
+  const filteredComplaints = useMemo(
+    () =>
+      (data || [])
+        .filter((c) => !filters.status || c.status === filters.status)
+        .filter((c) => !filters.category || c.category === filters.category),
+    [data, filters]
+  );
 
   useEffect(() => {
-    loadComplaints();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [complaints, filters]);
-
-  const loadComplaints = async () => {
-    try {
-      const response = await apiClient.get('/complaints');
-      setComplaints(response.data.data || []);
-    } catch (error) {
-      toast.error('Failed to load complaints');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const applyFilters = () => {
-    let filtered = complaints;
-
-    if (filters.status) {
-      filtered = filtered.filter((c) => c.status === filters.status);
-    }
-
-    if (filters.category) {
-      filtered = filtered.filter((c) => c.category === filters.category);
-    }
-
-    setFilteredComplaints(filtered);
     setCurrentPage(1);
-  };
+  }, [filters]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;

@@ -143,7 +143,7 @@ describe('errorHandler', () => {
     process.env.NODE_ENV = 'production';
     let res = call(new Error('boom'));
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'boom' });
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Internal Server Error' }); // 5xx messages are not leaked in production
     res = call({ status: 404, message: 'nf' });
     expect(res.status).toHaveBeenCalledWith(404);
     res = call({});

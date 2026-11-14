@@ -5,178 +5,102 @@ const express = require('express');
 const router = express.Router();
 const assignmentService = require('../services/assignmentService');
 const wardService = require('../services/wardService');
-const { db } = require('../config/database');
+const officerService = require('../services/officerService');
+const AppError = require('../utils/AppError');
 const { verifyToken, checkRole } = require('../middleware/auth');
+const { parsePagination, parseId } = require('../utils/pagination');
 
-// Auto-assign complaint (called internally when complaint is created)
+// Auto-assign complaint (admin / officer)
 router.post('/auto-assign/:complaintId', verifyToken, checkRole('admin', 'officer'), async (req, res) => {
-  try {
-    const { complaintId } = req.params;
+  const result = await assignmentService.autoAssignComplaint(parseId(req.params.complaintId, 'complaint id'));
 
-    const result = await assignmentService.autoAssignComplaint(complaintId);
-
-    res.json({
-      success: true,
-      message: 'Complaint auto-assigned successfully',
-      assignment: result,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    message: 'Complaint auto-assigned successfully',
+    assignment: result,
+  });
 });
 
 // Manually assign complaint (Admin override)
 router.post('/assign/:complaintId', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { complaintId } = req.params;
-    const { officer_id } = req.body;
+  const complaintId = parseId(req.params.complaintId, 'complaint id');
+  const { officer_id } = req.body || {};
 
-    if (!officer_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'officer_id is required',
-      });
-    }
-
-    const result = await assignmentService.manualAssign(complaintId, officer_id, req.user.user_id);
-
-    res.json({
-      success: true,
-      message: 'Complaint assigned to officer',
-      assignment: result,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
+  if (!officer_id) {
+    throw AppError.badRequest('officer_id is required');
   }
+
+  const result = await assignmentService.manualAssign(
+    complaintId,
+    parseId(officer_id, 'officer_id'),
+    req.user.user_id
+  );
+
+  res.json({
+    success: true,
+    message: 'Complaint assigned to officer',
+    assignment: result,
+  });
 });
+
+// Parse and range-check a coordinate pair from the request body
+const requireCoordinates = (body = {}) => {
+  const { latitude, longitude } = body;
+  if (!latitude || !longitude) {
+    throw AppError.badRequest('latitude and longitude are required');
+  }
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+  if (!Number.isFinite(lat) || lat < -90 || lat > 90 || !Number.isFinite(lng) || lng < -180 || lng > 180) {
+    throw AppError.badRequest('Invalid coordinates');
+  }
+  return { lat, lng };
+};
 
 // Find nearest officers to a location
 router.post('/nearest-officers', verifyToken, async (req, res) => {
-  try {
-    const { latitude, longitude, ward_id, limit = 5 } = req.body;
+  const body = req.body || {};
+  const { lat, lng } = requireCoordinates(body);
+  const { limit } = parsePagination({ limit: body.limit }, { defaultLimit: 5, maxLimit: 100 });
 
-    if (!latitude || !longitude) {
-      return res.status(400).json({
-        success: false,
-        error: 'latitude and longitude are required',
-      });
-    }
+  const wardId = body.ward_id === undefined || body.ward_id === null || body.ward_id === ''
+    ? null
+    : parseId(body.ward_id, 'ward_id');
 
-    const officers = await assignmentService.findNearestOfficers(
-      latitude,
-      longitude,
-      ward_id,
-      parseInt(limit)
-    );
+  const officers = await assignmentService.findNearestOfficers(lat, lng, wardId, limit);
 
-    res.json({
-      success: true,
-      data: officers,
-      count: officers.length,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    data: officers,
+    count: officers.length,
+  });
 });
 
 // Get officer workload
 router.get('/workload/:officerId', verifyToken, checkRole('admin', 'officer'), async (req, res) => {
-  try {
-    const { officerId } = req.params;
+  const officerId = parseId(req.params.officerId, 'officer id');
+  await officerService.assertOfficerAccess(officerId, req.user);
 
-    // Check authorization
-    const officer = await db.oneOrNone(
-      'SELECT user_id FROM officers WHERE officer_id = $1',
-      [officerId]
-    );
+  const workload = await assignmentService.getOfficerWorkload(officerId);
 
-    if (!officer) {
-      return res.status(404).json({
-        success: false,
-        error: 'Officer not found',
-      });
-    }
-
-    if (req.user.role !== 'admin' && req.user.user_id !== officer.user_id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Not authorized',
-      });
-    }
-
-    const workload = await assignmentService.getOfficerWorkload(officerId);
-
-    res.json({
-      success: true,
-      workload,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({ success: true, workload });
 });
 
 // Balance workload in a ward (Admin)
 router.post('/balance/:wardId', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { wardId } = req.params;
+  const result = await assignmentService.balanceWorkload(parseId(req.params.wardId, 'ward id'));
 
-    const result = await assignmentService.balanceWorkload(wardId);
-
-    res.json({
-      success: true,
-      ...result,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({ success: true, ...result });
 });
 
 // Get ward by coordinates
 router.post('/ward-by-location', verifyToken, async (req, res) => {
-  try {
-    const { latitude, longitude } = req.body;
+  const { lat, lng } = requireCoordinates(req.body);
 
-    if (!latitude || !longitude) {
-      return res.status(400).json({
-        success: false,
-        error: 'latitude and longitude are required',
-      });
-    }
+  const ward = await wardService.getWardByCoordinates(lat, lng);
+  if (!ward) throw AppError.notFound('No ward found for this location');
 
-    const ward = await wardService.getWardByCoordinates(latitude, longitude);
-
-    if (!ward) {
-      return res.status(404).json({
-        success: false,
-        error: 'No ward found for this location',
-      });
-    }
-
-    res.json({
-      success: true,
-      ward,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({ success: true, ward });
 });
 
 module.exports = router;

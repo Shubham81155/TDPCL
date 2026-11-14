@@ -1,300 +1,160 @@
 // src/routes/officers.js
-// Officer Management Routes (Admin only)
+// Officer Management Routes (Admin only unless noted)
 
 const express = require('express');
 const router = express.Router();
 const officerService = require('../services/officerService');
-const wardService = require('../services/wardService');
-const { db } = require('../config/database');
+const AppError = require('../utils/AppError');
 const { verifyToken, checkRole } = require('../middleware/auth');
+const { parsePagination, parseId, parseOptionalInt } = require('../utils/pagination');
 
 // Get all officers (Admin)
 router.get('/', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { status, ward_id, limit = 100, offset = 0 } = req.query;
+  const { status, ward_id } = req.query;
+  const { limit, offset } = parsePagination(req.query, { defaultLimit: 100, maxLimit: 100 });
 
-    const filters = {
-      status: status || 'active',
-      wardId: ward_id ? parseInt(ward_id) : null,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-    };
+  const filters = {
+    status: status || 'active',
+    wardId: parseOptionalInt(ward_id),
+    limit,
+    offset,
+  };
 
-    const officers = await officerService.getAllOfficers(filters);
+  const [officers, total] = await Promise.all([
+    officerService.getAllOfficers(filters),
+    officerService.countOfficers(filters),
+  ]);
 
-    res.json({
-      success: true,
-      data: officers,
-      count: officers.length,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    data: officers,
+    count: officers.length,
+    total,
+  });
 });
 
 // Current officer's own profile / metrics (resolved from the logged-in user)
-const getOwnOfficerId = async (userId) => {
-  const row = await db.oneOrNone('SELECT officer_id FROM officers WHERE user_id = $1', [userId]);
-  return row ? row.officer_id : null;
-};
-
 router.get('/me', verifyToken, checkRole('officer'), async (req, res) => {
-  try {
-    const officerId = await getOwnOfficerId(req.user.user_id);
-    if (!officerId) {
-      return res.status(404).json({ success: false, error: 'Officer profile not found' });
-    }
-    const officer = await officerService.getOfficerById(officerId);
-    res.json({ success: true, officer });
-  } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
-  }
+  const officer = await officerService.getOfficerProfileForUser(req.user.user_id);
+  res.json({ success: true, officer });
 });
 
 router.get('/me/metrics', verifyToken, checkRole('officer'), async (req, res) => {
-  try {
-    const officerId = await getOwnOfficerId(req.user.user_id);
-    if (!officerId) {
-      return res.status(404).json({ success: false, error: 'Officer profile not found' });
-    }
-    const metrics = await officerService.getOfficerMetrics(officerId);
-    res.json({ success: true, metrics });
-  } catch (error) {
-    res.status(400).json({ success: false, error: error.message });
-  }
+  const metrics = await officerService.getOfficerMetricsForUser(req.user.user_id);
+  res.json({ success: true, metrics });
 });
 
 // Get officer by ID (Admin, Officer - self)
 router.get('/:id', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
+  const officer = await officerService.getOfficerById(parseId(req.params.id, 'officer id'));
+  if (!officer) throw AppError.notFound('Officer not found');
 
-    // Check authorization
-    const officer = await db.oneOrNone(
-      'SELECT user_id FROM officers WHERE officer_id = $1',
-      [id]
-    );
-
-    if (!officer) {
-      return res.status(404).json({
-        success: false,
-        error: 'Officer not found',
-      });
-    }
-
-    if (req.user.role !== 'admin' && req.user.user_id !== officer.user_id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Not authorized',
-      });
-    }
-
-    const officerData = await officerService.getOfficerById(id);
-
-    res.json({
-      success: true,
-      officer: officerData,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
+  if (req.user.role !== 'admin' && Number(req.user.user_id) !== Number(officer.user_id)) {
+    throw AppError.forbidden('Not authorized');
   }
+
+  res.json({ success: true, officer });
 });
 
 // Create new officer (Admin only)
 router.post('/', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { email, password, employee_id, assigned_area_name, year_of_joining, name, phone } = req.body;
+  const { email, password, employee_id, assigned_area_name, year_of_joining, name, phone } = req.body || {};
 
-    if (!email || !password || !employee_id) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: email, password, employee_id',
-      });
-    }
-
-    const officerData = {
-      name: name || email.split('@')[0],
-      email,
-      phone: phone || '0000000000',
-      password,
-      employee_id,
-      ward_id: null,
-      area_name: assigned_area_name || 'Unassigned',
-      year_of_joining: year_of_joining ? parseInt(year_of_joining) : new Date().getFullYear(),
-    };
-
-    const officer = await officerService.createOfficer(officerData);
-
-    res.status(201).json({
-      success: true,
-      message: 'Officer created successfully',
-      officer,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
+  if (!email || !password || !employee_id) {
+    throw AppError.badRequest('Missing required fields: email, password, employee_id');
   }
+  if (typeof email !== 'string' || typeof password !== 'string') {
+    throw AppError.badRequest('email and password must be strings');
+  }
+
+  const joined = year_of_joining ? parseInt(year_of_joining, 10) : new Date().getFullYear();
+  if (!Number.isInteger(joined)) {
+    throw AppError.badRequest('year_of_joining must be a number');
+  }
+
+  const officer = await officerService.createOfficer({
+    name: name || email.split('@')[0],
+    email,
+    phone: phone || '0000000000',
+    password,
+    employee_id,
+    ward_id: null,
+    area_name: assigned_area_name || 'Unassigned',
+    year_of_joining: joined,
+  });
+
+  res.status(201).json({
+    success: true,
+    message: 'Officer created successfully',
+    officer,
+  });
 });
 
 // Update officer (Admin only)
 router.put('/:id', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body;
+  const officer = await officerService.updateOfficer(parseId(req.params.id, 'officer id'), req.body || {});
 
-    const officer = await officerService.updateOfficer(id, updateData);
-
-    res.json({
-      success: true,
-      message: 'Officer updated successfully',
-      officer,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    message: 'Officer updated successfully',
+    officer,
+  });
 });
 
 // Update officer location (Officer self-update)
 router.post('/:id/location', verifyToken, checkRole('officer'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { latitude, longitude } = req.body;
+  const id = parseId(req.params.id, 'officer id');
+  const { latitude, longitude } = req.body || {};
 
-    if (!latitude || !longitude) {
-      return res.status(400).json({
-        success: false,
-        error: 'Latitude and longitude are required',
-      });
-    }
-
-    // Verify officer owns this account
-    const officer = await db.oneOrNone(
-      'SELECT user_id FROM officers WHERE officer_id = $1',
-      [id]
-    );
-
-    if (!officer || officer.user_id !== req.user.user_id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Not authorized',
-      });
-    }
-
-    const updated = await officerService.updateOfficerLocation(id, latitude, longitude);
-
-    res.json({
-      success: true,
-      message: 'Location updated successfully',
-      officer: updated,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
+  const missing = (v) => v === undefined || v === null || v === '';
+  if (missing(latitude) || missing(longitude)) {
+    throw AppError.badRequest('Latitude and longitude are required');
   }
+
+  // Verify officer owns this account
+  const ownerUserId = await officerService.getOfficerUserId(id);
+  if (ownerUserId === null || Number(ownerUserId) !== Number(req.user.user_id)) {
+    throw AppError.forbidden('Not authorized');
+  }
+
+  const updated = await officerService.updateOfficerLocation(id, latitude, longitude);
+
+  res.json({
+    success: true,
+    message: 'Location updated successfully',
+    officer: updated,
+  });
 });
 
 // Get officer metrics (Admin, Officer self)
 router.get('/:id/metrics', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
+  const id = parseId(req.params.id, 'officer id');
+  await officerService.assertOfficerAccess(id, req.user);
 
-    // Check authorization
-    const officer = await db.oneOrNone(
-      'SELECT user_id FROM officers WHERE officer_id = $1',
-      [id]
-    );
+  const metrics = await officerService.getOfficerMetrics(id);
 
-    if (!officer) {
-      return res.status(404).json({
-        success: false,
-        error: 'Officer not found',
-      });
-    }
-
-    if (req.user.role !== 'admin' && req.user.user_id !== officer.user_id) {
-      return res.status(403).json({
-        success: false,
-        error: 'Not authorized',
-      });
-    }
-
-    const metrics = await officerService.getOfficerMetrics(id);
-
-    res.json({
-      success: true,
-      metrics,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({ success: true, metrics });
 });
 
 // Deactivate officer (Admin only)
 router.patch('/:id/deactivate', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { id } = req.params;
+  const updated = await officerService.deactivateOfficer(parseId(req.params.id, 'officer id'));
 
-    const updated = await officerService.deactivateOfficer(id);
-
-    res.json({
-      success: true,
-      message: 'Officer deactivated and complaints reassigned',
-      officer: updated,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    message: 'Officer deactivated and complaints reassigned',
+    officer: updated,
+  });
 });
 
 // Delete officer (Admin only)
 router.delete('/:id', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { id } = req.params;
+  await officerService.deleteOfficer(parseId(req.params.id, 'officer id'));
 
-    // Delete officer record
-    const { db } = require('../config/database');
-    const officer = await db.oneOrNone('SELECT user_id FROM officers WHERE officer_id = $1', [id]);
-
-    if (!officer) {
-      return res.status(404).json({
-        success: false,
-        error: 'Officer not found',
-      });
-    }
-
-    // Delete related user account
-    await db.none('DELETE FROM officers WHERE officer_id = $1', [id]);
-    await db.none('DELETE FROM users WHERE user_id = $1', [officer.user_id]);
-
-    res.json({
-      success: true,
-      message: 'Officer deleted successfully',
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    message: 'Officer deleted successfully',
+  });
 });
 
 module.exports = router;

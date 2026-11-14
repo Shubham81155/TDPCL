@@ -1,138 +1,81 @@
 // src/routes/wards.js
-// Ward Management Routes (Admin only)
+// Ward Management Routes (writes are Admin only)
 
 const express = require('express');
 const router = express.Router();
 const wardService = require('../services/wardService');
+const AppError = require('../utils/AppError');
 const { verifyToken, checkRole } = require('../middleware/auth');
+const { parsePagination, parseId } = require('../utils/pagination');
 
 // Get all wards
 router.get('/', verifyToken, async (req, res) => {
-  try {
-    const { city, limit = 100, offset = 0 } = req.query;
+  const { city } = req.query;
+  const { limit, offset } = parsePagination(req.query, { defaultLimit: 100, maxLimit: 100 });
+  const filters = { city, limit, offset };
 
-    const filters = {
-      city,
-      limit: parseInt(limit),
-      offset: parseInt(offset),
-    };
+  const [wards, total] = await Promise.all([
+    wardService.getAllWards(filters),
+    wardService.countWards(filters),
+  ]);
 
-    const wards = await wardService.getAllWards(filters);
-
-    res.json({
-      success: true,
-      data: wards,
-      count: wards.length,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    data: wards,
+    count: wards.length,
+    total,
+  });
 });
 
 // Get ward by ID
 router.get('/:id', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
+  const id = parseId(req.params.id, 'ward id');
 
-    const ward = await wardService.getWardById(id);
+  const ward = await wardService.getWardById(id);
+  if (!ward) throw AppError.notFound('Ward not found');
 
-    if (!ward) {
-      return res.status(404).json({
-        success: false,
-        error: 'Ward not found',
-      });
-    }
+  const officers = await wardService.getWardOfficers(id);
 
-    // Get officers in this ward
-    const officers = await wardService.getWardOfficers(id);
-
-    res.json({
-      success: true,
-      ward,
-      officers,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({ success: true, ward, officers });
 });
 
 // Create new ward (Admin only)
 router.post('/', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { name, city, state, boundaries_geojson } = req.body || {};
+  const { name, city, state, boundaries_geojson } = req.body || {};
 
-    if (!name || !city || !state || !boundaries_geojson) {
-      return res.status(400).json({
-        success: false,
-        error: 'Missing required fields: name, city, state, boundaries_geojson',
-      });
-    }
-
-    const ward = await wardService.createWard({
-      name,
-      city,
-      state,
-      boundaries_geojson,
-    });
-
-    res.status(201).json({
-      success: true,
-      message: 'Ward created successfully',
-      ward,
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      success: false,
-      error: error.message,
-    });
+  if (!name || !city || !state || !boundaries_geojson) {
+    throw AppError.badRequest('Missing required fields: name, city, state, boundaries_geojson');
   }
+
+  const ward = await wardService.createWard({ name, city, state, boundaries_geojson });
+
+  res.status(201).json({
+    success: true,
+    message: 'Ward created successfully',
+    ward,
+  });
 });
 
 // Update ward (Admin only)
 router.put('/:id', verifyToken, checkRole('admin'), async (req, res) => {
-  try {
-    const { id } = req.params;
-    const updateData = req.body || {};
+  const ward = await wardService.updateWard(req.params.id, req.body || {});
 
-    const ward = await wardService.updateWard(id, updateData);
-
-    res.json({
-      success: true,
-      message: 'Ward updated successfully',
-      ward,
-    });
-  } catch (error) {
-    res.status(error.status || 500).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    message: 'Ward updated successfully',
+    ward,
+  });
 });
 
 // Get officers in ward
 router.get('/:id/officers', verifyToken, async (req, res) => {
-  try {
-    const { id } = req.params;
+  const officers = await wardService.getWardOfficers(parseId(req.params.id, 'ward id'));
 
-    const officers = await wardService.getWardOfficers(id);
-
-    res.json({
-      success: true,
-      data: officers,
-      count: officers.length,
-    });
-  } catch (error) {
-    res.status(400).json({
-      success: false,
-      error: error.message,
-    });
-  }
+  res.json({
+    success: true,
+    data: officers,
+    count: officers.length,
+  });
 });
 
 module.exports = router;

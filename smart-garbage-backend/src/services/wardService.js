@@ -2,43 +2,51 @@
 // Ward Service - Ward/Area management
 
 const { db } = require('../config/database');
+const AppError = require('../utils/AppError');
 
 // Get all wards
 const getAllWards = async (filters = {}) => {
   const { city, limit = 100, offset = 0 } = filters;
 
-  let query = `
-    SELECT 
-      w.ward_id, w.name, w.city, w.state,
-      ST_AsGeoJSON(w.boundaries) as boundaries_geojson,
-      COUNT(DISTINCT o.officer_id) as officer_count,
-      COUNT(DISTINCT c.complaint_id) as complaint_count,
-      w.created_at
-    FROM wards w
-    LEFT JOIN officers o ON w.ward_id = o.assigned_ward_id AND o.status = 'active'
-    LEFT JOIN complaints c ON w.ward_id = c.ward_id
-    WHERE 1=1
-  `;
-
   const params = [];
-  let paramIndex = 1;
-
+  let where = '1=1';
   if (city) {
-    query += ` AND w.city = $${paramIndex}`;
     params.push(city);
-    paramIndex++;
+    where += ` AND w.city = $${params.length}`;
   }
-
-  query += ` GROUP BY w.ward_id
-    ORDER BY w.created_at DESC
-    LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
   params.push(limit, offset);
 
+  // Correlated sub-selects avoid the officers x complaints join fan-out
   try {
-    const wards = await db.manyOrNone(query, params);
-    return wards;
+    return await db.manyOrNone(
+      `SELECT 
+        w.ward_id, w.name, w.city, w.state,
+        ST_AsGeoJSON(w.boundaries) as boundaries_geojson,
+        (SELECT COUNT(*) FROM officers o
+          WHERE o.assigned_ward_id = w.ward_id AND o.status = 'active') as officer_count,
+        (SELECT COUNT(*) FROM complaints c WHERE c.ward_id = w.ward_id) as complaint_count,
+        w.created_at
+      FROM wards w
+      WHERE ${where}
+      ORDER BY w.created_at DESC
+      LIMIT $${params.length - 1} OFFSET $${params.length}`,
+      params
+    );
   } catch (error) {
-    throw new Error(`Failed to fetch wards: ${error.message}`);
+    throw AppError.wrap(error, 'Failed to fetch wards');
+  }
+};
+
+// Total wards matching the same filters as getAllWards (ignores limit/offset)
+const countWards = async (filters = {}) => {
+  const { city } = filters;
+  try {
+    const row = city
+      ? await db.one('SELECT COUNT(*) AS total FROM wards WHERE city = $1', [city])
+      : await db.one('SELECT COUNT(*) AS total FROM wards');
+    return parseInt(row.total, 10) || 0;
+  } catch (error) {
+    throw AppError.wrap(error, 'Failed to count wards');
   }
 };
 
@@ -56,14 +64,13 @@ const getWardById = async (wardId) => {
 
     return ward;
   } catch (error) {
-    throw new Error(`Failed to fetch ward: ${error.message}`);
+    throw AppError.wrap(error, 'Failed to fetch ward');
   }
 };
 
-class WardError extends Error {
+class WardError extends AppError {
   constructor(message, status = 400) {
-    super(message);
-    this.status = status;
+    super(message, status);
   }
 }
 
@@ -136,6 +143,15 @@ const assertValidGeometry = async (geoJsonString) => {
   if (!row.ok) throw new WardError(`Invalid polygon: ${row.reason}`);
 };
 
+// The unique index uq_wards_name_city_ci closes the race the pre-check cannot:
+// the loser of two simultaneous requests gets a 409 instead of a raw DB error.
+const mapUniqueViolation = (error) => {
+  if (error && error.code === '23505') {
+    return new WardError('A ward with this name already exists in this city', 409);
+  }
+  return error;
+};
+
 const assertNoDuplicate = async (name, city, excludeId = null) => {
   const dup = await db.oneOrNone(
     `SELECT ward_id FROM wards
@@ -167,8 +183,7 @@ const createWard = async (wardData = {}) => {
       [name, city, state, geo]
     );
   } catch (error) {
-    if (error instanceof WardError) throw error;
-    throw new Error(`Failed to create ward: ${error.message}`);
+    throw AppError.wrap(mapUniqueViolation(error), 'Failed to create ward');
   }
 };
 
@@ -219,8 +234,7 @@ const updateWard = async (wardId, updateData = {}) => {
     if (!ward) throw new WardError('Ward not found', 404);
     return ward;
   } catch (error) {
-    if (error instanceof WardError) throw error;
-    throw new Error(`Failed to update ward: ${error.message}`);
+    throw AppError.wrap(mapUniqueViolation(error), 'Failed to update ward');
   }
 };
 
@@ -230,7 +244,7 @@ const getWardByCoordinates = async (latitude, longitude) => {
     const lng = Number(longitude);
     const lat = Number(latitude);
     if (!Number.isFinite(lng) || !Number.isFinite(lat)) {
-      throw new Error('Invalid coordinates');
+      throw AppError.badRequest('Invalid coordinates');
     }
     const ward = await db.oneOrNone(
       `SELECT ward_id, name, city, state
@@ -242,7 +256,7 @@ const getWardByCoordinates = async (latitude, longitude) => {
 
     return ward;
   } catch (error) {
-    throw new Error(`Failed to find ward by coordinates: ${error.message}`);
+    throw AppError.wrap(error, 'Failed to find ward by coordinates');
   }
 };
 
@@ -265,12 +279,13 @@ const getWardOfficers = async (wardId) => {
 
     return officers;
   } catch (error) {
-    throw new Error(`Failed to fetch ward officers: ${error.message}`);
+    throw AppError.wrap(error, 'Failed to fetch ward officers');
   }
 };
 
 module.exports = {
   getAllWards,
+  countWards,
   getWardById,
   createWard,
   updateWard,

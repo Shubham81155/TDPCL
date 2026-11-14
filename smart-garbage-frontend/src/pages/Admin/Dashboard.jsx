@@ -1,11 +1,14 @@
 // src/pages/Admin/Dashboard.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Container, Row, Col, Card, Spinner, Button, Alert } from 'react-bootstrap';
+import React, { useMemo } from 'react';
+import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { Chart as ChartJS, ArcElement, Tooltip, Legend } from 'chart.js';
 import { Doughnut } from 'react-chartjs-2';
-import apiClient from '../../services/api';
-import toast from 'react-hot-toast';
+import { useAdminStats } from '../../hooks/useAdminStats';
+import { errorMessage } from '../../hooks/queryUtils';
+import StatCard from '../../components/common/StatCard';
+import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 
 ChartJS.register(ArcElement, Tooltip, Legend);
 
@@ -23,44 +26,9 @@ const STATUS_META = [
   { key: 'rejected_count', label: 'Rejected', color: '#6c757d' },
 ];
 
-function StatCard({ icon, title, value, color = '#28a745', hint }) {
-  return (
-    <Card className="stat-card border-0 shadow-sm h-100">
-      <Card.Body className="text-center p-3 p-md-4">
-        <div className="stat-icon mb-2" style={{ color }} aria-hidden="true">
-          <i className={`fas fa-${icon}`}></i>
-        </div>
-        <h6 className="text-muted mb-1">{title}</h6>
-        <h3 className="fw-bold mb-0" style={{ color }}>{value}</h3>
-        {hint && <small className="text-muted">{hint}</small>}
-      </Card.Body>
-    </Card>
-  );
-}
-
 function AdminDashboard() {
-  const [stats, setStats] = useState(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
-
-  const loadStats = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const response = await apiClient.get('/admin/stats/complaints');
-      setStats(response.data.stats || null);
-    } catch (err) {
-      const msg = err?.response?.data?.error || 'Failed to load statistics';
-      setError(msg);
-      toast.error('Failed to load statistics');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadStats();
-  }, [loadStats]);
+  const { data: stats, isLoading, error: queryError, refetch } = useAdminStats();
+  const error = queryError ? errorMessage(queryError, 'Failed to load statistics') : null;
 
   const data = useMemo(() => {
     if (!stats) return null;
@@ -118,20 +86,9 @@ function AdminDashboard() {
       </Row>
 
       {isLoading ? (
-        <div className="text-center py-5" role="status" aria-live="polite">
-          <Spinner animation="border" variant="success" />
-          <span className="visually-hidden">Loading statistics</span>
-        </div>
+        <LoadingState label="Loading statistics" />
       ) : error || !data ? (
-        <Alert variant="danger" className="d-flex flex-wrap align-items-center justify-content-between gap-2">
-          <span>
-            <i className="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
-            {error || 'No statistics available.'}
-          </span>
-          <Button variant="outline-danger" size="sm" onClick={loadStats}>
-            <i className="fas fa-redo me-1" aria-hidden="true"></i>Retry
-          </Button>
-        </Alert>
+        <ErrorState message={error || 'No statistics available.'} onRetry={() => refetch()} />
       ) : (
         <>
           <Row className="g-3 mb-4">

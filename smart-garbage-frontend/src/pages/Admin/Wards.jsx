@@ -1,7 +1,8 @@
 // src/pages/Admin/Wards.jsx
-import React, { useCallback, useEffect, useState } from 'react';
-import { Container, Row, Col, Card, Table, Spinner, Alert, Form, Button, Modal } from 'react-bootstrap';
-import apiClient from '../../services/api';
+import React, { useState } from 'react';
+import { Container, Row, Col, Card, Table, Alert, Form, Button, Modal } from 'react-bootstrap';
+import { useWards, useSaveWard } from '../../hooks/useWards';
+import LoadingState from '../../components/common/LoadingState';
 import toast from 'react-hot-toast';
 
 const EMPTY_FORM = {
@@ -58,30 +59,16 @@ function parseGeoJson(text) {
 }
 
 function AdminWards() {
-  const [wards, setWards] = useState([]);
+  const { data: wardsData, isLoading } = useWards();
+  const wards = wardsData || [];
+  const saveWard = useSaveWard();
   const [query, setQuery] = useState('');
-  const [isLoading, setIsLoading] = useState(true);
 
   const [showModal, setShowModal] = useState(false);
   const [editing, setEditing] = useState(null); // ward row or null for create
   const [form, setForm] = useState(EMPTY_FORM);
   const [formError, setFormError] = useState('');
   const [saving, setSaving] = useState(false);
-
-  const loadWards = useCallback(async () => {
-    try {
-      const res = await apiClient.get('/wards');
-      setWards(res.data.data || []);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to load wards');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadWards();
-  }, [loadWards]);
 
   const setField = (key, value) => setForm((f) => ({ ...f, [key]: value }));
   const setBoundaryField = (key, value) =>
@@ -129,15 +116,9 @@ function AdminWards() {
 
     setSaving(true);
     try {
-      if (editing) {
-        await apiClient.put(`/wards/${editing.ward_id}`, payload);
-        toast.success('Ward updated');
-      } else {
-        await apiClient.post('/wards', payload);
-        toast.success('Ward created');
-      }
+      await saveWard.mutateAsync({ id: editing?.ward_id, body: payload });
+      toast.success(editing ? 'Ward updated' : 'Ward created');
       setShowModal(false);
-      await loadWards();
     } catch (err) {
       const msg = err.response?.data?.error || (editing ? 'Failed to update ward' : 'Failed to create ward');
       setFormError(msg);
@@ -201,9 +182,7 @@ function AdminWards() {
             onChange={(e) => setQuery(e.target.value)}
           />
           {isLoading ? (
-            <div className="text-center py-5">
-              <Spinner animation="border" />
-            </div>
+            <LoadingState label="Loading wards" variant="primary" />
           ) : filtered.length === 0 ? (
             <Alert variant="info" className="mb-0">
               No wards found.

@@ -316,3 +316,7 @@ body { background: var(--surface); color: #1f2d27; }
   *, *::before, *::after { transition: none !important; animation: none !important; }
   .card:hover, .btn:hover:not(:disabled), button:hover:not(:disabled) { transform: none !important; }
 }
+
+/* Accessibility: skip link + non-visible focus target */
+.skip-link { position: absolute; left: 8px; top: 8px; z-index: 2000; padding: 8px 14px; background: #fff; color: #1e7e34; border-radius: 4px; }
+#main-content:focus { outline: none; }

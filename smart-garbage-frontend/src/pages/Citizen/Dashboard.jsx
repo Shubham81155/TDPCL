@@ -1,44 +1,26 @@
 // src/pages/Citizen/Dashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Container, Row, Col, Card, Button, Alert } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import apiClient from '../../services/api';
+import { useMyComplaints } from '../../hooks/useComplaints';
+import StatusBadge from '../../components/common/StatusBadge';
 import { useAuth } from '../../context/AuthContext';
-import toast from 'react-hot-toast';
 
 function CitizenDashboard() {
-  const [stats, setStats] = useState({
-    pending_count: 0,
-    in_progress_count: 0,
-    resolved_count: 0,
-  });
-  const [recent, setRecent] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading } = useMyComplaints();
   const { user } = useAuth();
 
-  useEffect(() => {
-    loadDashboardStats();
-  }, []);
-
-  const loadDashboardStats = async () => {
-    try {
-      const response = await apiClient.get('/complaints');
-      const complaints = response.data.data || [];
-
-      const stats = {
+  const { stats, recent } = useMemo(() => {
+    const complaints = data || [];
+    return {
+      stats: {
         pending_count: complaints.filter((c) => c.status === 'new' || c.status === 'pending').length,
         in_progress_count: complaints.filter((c) => c.status === 'in_progress').length,
         resolved_count: complaints.filter((c) => c.status === 'resolved').length,
-      };
-
-      setStats(stats);
-      setRecent(complaints.slice(0, 5));
-    } catch (error) {
-      toast.error('Failed to load statistics');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+      },
+      recent: complaints.slice(0, 5),
+    };
+  }, [data]);
 
   const StatCard = ({ icon, title, count, color }) => (
     <Card className="border-0 shadow-sm h-100">
@@ -161,7 +143,7 @@ function CitizenDashboard() {
                           {(c.category || 'garbage').replace(/_/g, ' ')} · {c.area || 'Unknown area'}
                         </span>
                       </span>
-                      <span className={`badge status-${c.status}`}>{(c.status || '').replace(/_/g, ' ')}</span>
+                      <StatusBadge status={c.status} />
                     </Link>
                   ))}
                   <Link to="/citizen/complaints" className="small pt-2">
