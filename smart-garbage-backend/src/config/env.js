@@ -34,6 +34,19 @@ const buildSchema = (env) => {
 
     FRONTEND_URL: Joi.string().default('http://localhost:3000'),
     STORAGE_PROVIDER: Joi.string().valid('local', 's3').default('local'),
+    // Email: gmail | sendgrid | smtp | none. Placeholder values count as "not configured" (see mailTransport).
+    EMAIL_SERVICE: Joi.string().valid('gmail', 'sendgrid', 'smtp', 'none').insensitive().empty('').default('gmail'),
+    EMAIL_FROM: Joi.string().allow(''),
+    SMTP_HOST: Joi.string()
+      .allow('')
+      .when('EMAIL_SERVICE', {
+        is: Joi.string().valid('smtp').insensitive(),
+        then: isProd(env) ? Joi.string().required() : Joi.string().allow(''),
+      }),
+    SMTP_PORT: Joi.number().integer().min(1).max(65535).empty('').default(587),
+    SMTP_SECURE: Joi.boolean().empty(''),
+    SMTP_USER: Joi.string().allow(''),
+    SMTP_PASSWORD: Joi.string().allow(''),
     LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
   }).unknown(true);
 };

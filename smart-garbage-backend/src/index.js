@@ -32,8 +32,10 @@ const start = async () => {
   const server = app.listen(config.port, () => {
     logger.info('Server listening', { url: `http://${config.host}:${config.port}`, env: config.env });
     try {
-      initializeEmailService();
-      logger.info('Email service initialized');
+      if (initializeEmailService()) {
+        logger.info('Email service initialized');
+      }
+      // when disabled, initializeEmailService already logged why ("email disabled: ...")
     } catch (error) {
       logger.warn('Email service initialization failed', { err: error });
     }

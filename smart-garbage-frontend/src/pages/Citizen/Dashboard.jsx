@@ -14,9 +14,12 @@ function CitizenDashboard() {
     const complaints = data || [];
     return {
       stats: {
-        pending_count: complaints.filter((c) => c.status === 'new' || c.status === 'pending').length,
+        // "Pending" = waiting to be worked on (includes complaints already assigned to an officer)
+        pending_count: complaints.filter((c) => ['new', 'pending', 'assigned'].includes(c.status)).length,
         in_progress_count: complaints.filter((c) => c.status === 'in_progress').length,
         resolved_count: complaints.filter((c) => c.status === 'resolved').length,
+        // every complaint, including rejected ones
+        total_count: complaints.length,
       },
       recent: complaints.slice(0, 5),
     };
@@ -68,7 +71,7 @@ function CitizenDashboard() {
           <StatCard
             icon="file"
             title="Total"
-            count={stats.pending_count + stats.in_progress_count + stats.resolved_count}
+            count={stats.total_count}
             color="primary"
           />
         </Col>

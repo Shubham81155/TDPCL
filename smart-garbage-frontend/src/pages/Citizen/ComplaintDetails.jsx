@@ -258,7 +258,7 @@ function ComplaintDetails() {
               {complaint.status !== 'resolved' && (
                 <Alert variant="info" className="mt-3 small mb-0">
                   <i className="fas fa-info-circle me-2"></i>
-                  Your issue is being processed. You will receive updates via email and SMS.
+                  Your issue is being processed. You will receive updates by email.
                 </Alert>
               )}
 

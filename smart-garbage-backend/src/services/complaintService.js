@@ -76,10 +76,11 @@ const getComplaintById = async (complaintId) => {
         c.status, c.resolution_description, c.resolution_image_path,
         c.created_at, c.assigned_at, c.started_at, c.resolved_at,
         u.name as citizen_name, u.email as citizen_email, u.phone as citizen_phone,
-        o.user_id as officer_user_id
+        o.user_id as officer_user_id, ou.name as assigned_officer
        FROM complaints c
        LEFT JOIN users u ON c.user_id = u.user_id
        LEFT JOIN officers o ON c.assigned_officer_id = o.officer_id
+       LEFT JOIN users ou ON o.user_id = ou.user_id
        WHERE c.complaint_id = $1`,
       [complaintId]
     );

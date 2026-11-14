@@ -27,6 +27,14 @@ const num = (v) => {
 };
 const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
 
+// Colour reflects how good the rate is; grey when there is nothing to measure yet.
+const rateColor = (rate, total) => {
+  if (!total) return '#6c757d';
+  if (rate >= 70) return '#28a745';
+  if (rate >= 40) return '#e0a800';
+  return '#dc3545';
+};
+
 const barOptions = {
   responsive: true,
   maintainAspectRatio: false,
@@ -197,7 +205,7 @@ function AdminAnalytics() {
                               <td className="text-end">{o.active}</td>
                               <td className="text-end">{o.avgHours == null ? '-' : o.avgHours.toFixed(1)}</td>
                               <td className="text-end">
-                                <span className="badge" style={{ background: GREEN }}>
+                                <span className="badge" style={{ background: rateColor(o.rate, o.total) }}>
                                   {o.rate.toFixed(1)}%
                                 </span>
                               </td>
@@ -239,7 +247,7 @@ function AdminAnalytics() {
                               <td className="text-end">{w.resolved}</td>
                               <td className="text-end">{w.officers}</td>
                               <td className="text-end">
-                                <span className="badge" style={{ background: GREEN }}>
+                                <span className="badge" style={{ background: rateColor(pct(w.resolved, w.total), w.total) }}>
                                   {pct(w.resolved, w.total)}%
                                 </span>
                               </td>

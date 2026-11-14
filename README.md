@@ -139,6 +139,8 @@ All routes are under `/api` and use `Authorization: Bearer <accessToken>` except
 
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md): design decisions, layering and next steps
 - [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): Docker Compose and production checklist
+- [docs/EMAIL.md](docs/EMAIL.md): configuring SMTP and verifying email delivery locally
+- [docs/CLASSIFIER.md](docs/CLASSIFIER.md): the optional photo classifier and how to supply the model
 - [docs/SRS.md](docs/SRS.md): requirements
 - [docs/ER_DIAGRAM.md](docs/ER_DIAGRAM.md): database design
 - [docs/API_DOCUMENTATION.md](docs/API_DOCUMENTATION.md): API reference
