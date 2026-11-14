@@ -65,7 +65,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 // Create new ward (Admin only)
 router.post('/', verifyToken, checkRole('admin'), async (req, res) => {
   try {
-    const { name, city, state, boundaries_geojson } = req.body;
+    const { name, city, state, boundaries_geojson } = req.body || {};
 
     if (!name || !city || !state || !boundaries_geojson) {
       return res.status(400).json({
@@ -87,7 +87,7 @@ router.post('/', verifyToken, checkRole('admin'), async (req, res) => {
       ward,
     });
   } catch (error) {
-    res.status(400).json({
+    res.status(error.status || 500).json({
       success: false,
       error: error.message,
     });
@@ -98,7 +98,7 @@ router.post('/', verifyToken, checkRole('admin'), async (req, res) => {
 router.put('/:id', verifyToken, checkRole('admin'), async (req, res) => {
   try {
     const { id } = req.params;
-    const updateData = req.body;
+    const updateData = req.body || {};
 
     const ward = await wardService.updateWard(id, updateData);
 
@@ -108,7 +108,7 @@ router.put('/:id', verifyToken, checkRole('admin'), async (req, res) => {
       ward,
     });
   } catch (error) {
-    res.status(400).json({
+    res.status(error.status || 500).json({
       success: false,
       error: error.message,
     });

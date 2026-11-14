@@ -46,7 +46,6 @@ function RegisterPage() {
       const response = await apiClient.post('/auth/register', {
         email: formData.email,
         password: formData.password,
-        role: formData.role,
       });
 
       toast.success('Registration successful! Logging you in...');
@@ -57,8 +56,8 @@ function RegisterPage() {
         password: formData.password,
       });
 
-      const { user_id, email: userEmail, role, accessToken, refreshToken } = loginResponse.data;
-      login({ user_id, email: userEmail, role }, accessToken, refreshToken);
+      const { user_id, name, email: userEmail, role, accessToken, refreshToken } = loginResponse.data;
+      login({ user_id, name, email: userEmail, role }, accessToken, refreshToken);
 
       navigate(role === 'citizen' ? '/citizen/dashboard' : '/login');
     } catch (error) {
@@ -109,24 +108,9 @@ function RegisterPage() {
               <Form.Control.Feedback type="invalid">{errors.password}</Form.Control.Feedback>
             </Form.Group>
 
-            <Form.Group className="mb-4">
-              <Form.Label>Register As *</Form.Label>
-              <Form.Select
-                name="role"
-                value={formData.role}
-                onChange={handleChange}
-                className="py-2"
-              >
-                <option value="citizen">Citizen - Report Issues</option>
-                <option value="officer">Officer - Manage Complaints</option>
-                <option value="admin">Admin - System Management</option>
-              </Form.Select>
-              <Form.Text className="text-muted d-block mt-2">
-                {formData.role === 'citizen' && 'Report garbage and civic issues in your area'}
-                {formData.role === 'officer' && 'Receive and resolve assigned complaints'}
-                {formData.role === 'admin' && 'Manage system, officers, and analytics'}
-              </Form.Text>
-            </Form.Group>
+            <p className="small text-muted mb-4">
+              <i className="fas fa-user me-1"></i> Accounts are created for citizens. Officer and admin accounts are issued by your municipality administrator.
+            </p>
 
             <Button
               variant="success"

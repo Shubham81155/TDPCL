@@ -13,6 +13,7 @@ const createComplaint = async (complaintData) => {
     latitude,
     longitude,
     area,
+    ward_id = null,
     category,
     urgency_level = 'medium',
   } = complaintData;
@@ -23,14 +24,14 @@ const createComplaint = async (complaintData) => {
       `INSERT INTO complaints (
         user_id, title, description, image_path, 
         location, latitude, longitude, area, 
-        category, urgency_level, status, created_at
+        category, urgency_level, status, created_at, ward_id
       ) VALUES ($1, $2, $3, $4, 
-        ST_GeomFromText('POINT(${longitude} ${latitude})', 4326),
-        $5, $6, $7, $8, $9, 'new', CURRENT_TIMESTAMP)
+        ST_SetSRID(ST_MakePoint($6::float8, $5::float8), 4326),
+        $5, $6, $7, $8, $9, 'new', CURRENT_TIMESTAMP, $10)
        RETURNING complaint_id, user_id, title, description, 
                  image_path, latitude, longitude, area, 
                  category,
-                 urgency_level, status, created_at`,
+                 urgency_level, status, created_at, ward_id`,
       [
         user_id,
         title,
@@ -41,6 +42,7 @@ const createComplaint = async (complaintData) => {
         area,
         category,
         urgency_level,
+        ward_id,
       ]
     );
 
@@ -223,28 +225,38 @@ const updateComplaintStatus = async (complaintId, newStatus, changedBy, comment)
 };
 
 // Resolve complaint with image
-const resolveComplaint = async (complaintId, resolutionImage, comments, officerId) => {
+const resolveComplaint = async (complaintId, resolutionImage, comments, officerId, changedByUserId) => {
   try {
-    const updated = await db.one(
-      `UPDATE complaints 
-       SET status = 'resolved',
-           resolution_image_path = $1,
-           resolution_description = $2,
-           resolved_at = CURRENT_TIMESTAMP,
-           updated_at = CURRENT_TIMESTAMP
-       WHERE complaint_id = $3 AND assigned_officer_id = $4
-       RETURNING complaint_id, status, resolved_at`,
-      [resolutionImage, comments, complaintId, officerId]
-    );
+    return await db.tx(async (t) => {
+      const current = await t.oneOrNone(
+        'SELECT status FROM complaints WHERE complaint_id = $1 AND assigned_officer_id = $2 FOR UPDATE',
+        [complaintId, officerId]
+      );
+      if (!current) {
+        throw new Error('Complaint not found or not assigned to you');
+      }
 
-    // Log in history
-    await db.none(
-      `INSERT INTO complaint_history (complaint_id, old_status, new_status, changed_by, comment)
-       VALUES ($1, 'in_progress', 'resolved', $2, $3)`,
-      [complaintId, officerId, comments || null]
-    );
+      const updated = await t.one(
+        `UPDATE complaints
+         SET status = 'resolved',
+             resolution_image_path = $1,
+             resolution_description = $2,
+             resolved_at = CURRENT_TIMESTAMP,
+             updated_at = CURRENT_TIMESTAMP
+         WHERE complaint_id = $3
+         RETURNING complaint_id, status, resolved_at`,
+        [resolutionImage, comments, complaintId]
+      );
 
-    return updated;
+      // changed_by references users.user_id (not officers.officer_id)
+      await t.none(
+        `INSERT INTO complaint_history (complaint_id, old_status, new_status, changed_by, comment)
+         VALUES ($1, $2, 'resolved', $3, $4)`,
+        [complaintId, current.status, changedByUserId, comments || null]
+      );
+
+      return updated;
+    });
   } catch (error) {
     throw new Error(`Failed to resolve complaint: ${error.message}`);
   }

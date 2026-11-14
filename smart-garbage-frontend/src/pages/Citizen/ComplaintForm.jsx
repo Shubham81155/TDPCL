@@ -12,6 +12,8 @@ function ComplaintForm() {
     latitude: '',
     longitude: '',
     category: '',
+    description: '',
+    urgency_level: 'medium',
     image: null,
   });
   const [errors, setErrors] = useState({});
@@ -88,6 +90,10 @@ function ComplaintForm() {
       submitData.append('latitude', formData.latitude);
       submitData.append('longitude', formData.longitude);
       submitData.append('category', formData.category);
+      if (formData.description.trim()) {
+        submitData.append('description', formData.description.trim());
+      }
+      submitData.append('urgency_level', formData.urgency_level);
       submitData.append('image', formData.image);
 
       const response = await apiClient.post('/complaints', submitData, {
@@ -173,6 +179,35 @@ function ComplaintForm() {
                     ))}
                   </Form.Select>
                   <Form.Control.Feedback type="invalid">{errors.category}</Form.Control.Feedback>
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-bold">Description (optional)</Form.Label>
+                  <Form.Control
+                    as="textarea"
+                    rows={3}
+                    name="description"
+                    maxLength={1000}
+                    placeholder="Describe the issue (e.g., overflowing bin near the market gate)"
+                    value={formData.description}
+                    onChange={handleChange}
+                  />
+                  <Form.Text className="text-muted">
+                    {formData.description.length}/1000
+                  </Form.Text>
+                </Form.Group>
+
+                <Form.Group className="mb-3">
+                  <Form.Label className="fw-bold">Urgency</Form.Label>
+                  <Form.Select
+                    name="urgency_level"
+                    value={formData.urgency_level}
+                    onChange={handleChange}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High - Urgent</option>
+                  </Form.Select>
                 </Form.Group>
 
                 <Form.Group className="mb-3">

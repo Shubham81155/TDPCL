@@ -23,11 +23,16 @@ const wardRoutes = require('./routes/wards');
 const assignmentRoutes = require('./routes/assignments');
 const adminRoutes = require('./routes/admin');
 
+if (!process.env.JWT_SECRET || (process.env.NODE_ENV === 'production' && process.env.JWT_SECRET.startsWith('your_'))) {
+  console.error('FATAL: set a strong JWT_SECRET in .env');
+  process.exit(1);
+}
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
 // Middleware
-app.use(helmet()); // Security headers
+app.use(helmet({ crossOriginResourcePolicy: { policy: 'cross-origin' } })); // Security headers (images in /uploads are used by the frontend on another port)
 app.use(cors()); // CORS
 app.use(morgan('combined')); // Logging
 app.use(express.json()); // JSON parser

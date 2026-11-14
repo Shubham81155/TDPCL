@@ -5,6 +5,7 @@ const express = require('express');
 const router = express.Router();
 const officerService = require('../services/officerService');
 const wardService = require('../services/wardService');
+const { db } = require('../config/database');
 const { verifyToken, checkRole } = require('../middleware/auth');
 
 // Get all officers (Admin)
@@ -31,6 +32,38 @@ router.get('/', verifyToken, checkRole('admin'), async (req, res) => {
       success: false,
       error: error.message,
     });
+  }
+});
+
+// Current officer's own profile / metrics (resolved from the logged-in user)
+const getOwnOfficerId = async (userId) => {
+  const row = await db.oneOrNone('SELECT officer_id FROM officers WHERE user_id = $1', [userId]);
+  return row ? row.officer_id : null;
+};
+
+router.get('/me', verifyToken, checkRole('officer'), async (req, res) => {
+  try {
+    const officerId = await getOwnOfficerId(req.user.user_id);
+    if (!officerId) {
+      return res.status(404).json({ success: false, error: 'Officer profile not found' });
+    }
+    const officer = await officerService.getOfficerById(officerId);
+    res.json({ success: true, officer });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
+  }
+});
+
+router.get('/me/metrics', verifyToken, checkRole('officer'), async (req, res) => {
+  try {
+    const officerId = await getOwnOfficerId(req.user.user_id);
+    if (!officerId) {
+      return res.status(404).json({ success: false, error: 'Officer profile not found' });
+    }
+    const metrics = await officerService.getOfficerMetrics(officerId);
+    res.json({ success: true, metrics });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
   }
 });
 

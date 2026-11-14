@@ -1,41 +1,123 @@
 // src/pages/Admin/Complaints.jsx
-import React, { useEffect, useState } from 'react';
-import { Container, Alert, Card, Table, Spinner, Badge } from 'react-bootstrap';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Container, Card, Table, Spinner, Badge, Button, Modal, Form, Row, Col, InputGroup, Pagination } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
-import { formatComplaintCategory } from '../../utils/classificationUtils';
+import { formatComplaintCategory, COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
+
+const PAGE_SIZE = 15;
+const STATUSES = ['new', 'assigned', 'pending', 'in_progress', 'resolved', 'rejected'];
+const URGENCY_VARIANTS = { critical: 'danger', high: 'danger', medium: 'warning', low: 'secondary' };
+
+const statusLabel = (s) => (s ? s.replace(/_/g, ' ') : 'unknown');
 
 function AdminComplaints() {
   const [complaints, setComplaints] = useState([]);
+  const [officers, setOfficers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [categoryFilter, setCategoryFilter] = useState('all');
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    loadComplaints();
-  }, []);
+  const [target, setTarget] = useState(null);
+  const [officerId, setOfficerId] = useState('');
+  const [submitting, setSubmitting] = useState(false);
 
-  const loadComplaints = async () => {
+  const loadComplaints = useCallback(async () => {
     try {
       const response = await apiClient.get('/admin/complaints');
-      setComplaints(response.data.data || []);
-    } catch (error) {
-      toast.error('Failed to load complaints');
+      setComplaints(response.data?.data || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load complaints');
     } finally {
       setIsLoading(false);
     }
+  }, []);
+
+  const loadOfficers = useCallback(async () => {
+    try {
+      const response = await apiClient.get('/officers?status=active');
+      setOfficers(response.data?.data || []);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to load officers');
+    }
+  }, []);
+
+  useEffect(() => {
+    loadComplaints();
+    loadOfficers();
+  }, [loadComplaints, loadOfficers]);
+
+  const officerName = useCallback(
+    (id) => {
+      if (!id) return 'Unassigned';
+      const o = officers.find((x) => String(x.officer_id) === String(id));
+      return o ? o.name : 'Unassigned';
+    },
+    [officers]
+  );
+
+  const counts = useMemo(() => {
+    const c = { all: complaints.length };
+    STATUSES.forEach((s) => {
+      c[s] = 0;
+    });
+    complaints.forEach((x) => {
+      if (c[x.status] !== undefined) c[x.status] += 1;
+    });
+    return c;
+  }, [complaints]);
+
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return complaints
+      .filter((c) => statusFilter === 'all' || c.status === statusFilter)
+      .filter((c) => categoryFilter === 'all' || c.category === categoryFilter)
+      .filter((c) => {
+        if (!q) return true;
+        return [c.complaint_id, c.area, c.citizen_name].some((v) =>
+          String(v ?? '').toLowerCase().includes(q)
+        );
+      })
+      .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  }, [complaints, statusFilter, categoryFilter, search]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages);
+  const pageItems = filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
+
+  const openAssign = (complaint) => {
+    setTarget(complaint);
+    setOfficerId(complaint.assigned_officer_id ? String(complaint.assigned_officer_id) : '');
   };
 
-  const getStatusBadge = (status) => {
-    const variants = {
-      new: 'secondary',
-      assigned: 'info',
-      pending: 'warning',
-      in_progress: 'primary',
-      resolved: 'success',
-      rejected: 'danger',
-    };
-
-    return <Badge bg={variants[status] || 'secondary'}>{status?.replace('_', ' ') || 'unknown'}</Badge>;
+  const closeAssign = () => {
+    if (!submitting) setTarget(null);
   };
+
+  const handleAssign = async (e) => {
+    e.preventDefault();
+    if (!officerId || !target) {
+      toast.error('Please select an officer');
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await apiClient.post(`/assignments/assign/${target.complaint_id}`, {
+        officer_id: Number(officerId),
+      });
+      toast.success(`Complaint #${target.complaint_id} assigned`);
+      setTarget(null);
+      await Promise.all([loadComplaints(), loadOfficers()]);
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to assign complaint');
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const chips = ['all', ...STATUSES];
 
   return (
     <Container className="py-4">
@@ -43,49 +125,197 @@ function AdminComplaints() {
         <i className="fas fa-list me-2 text-success"></i>
         All Complaints
       </h2>
-      <Alert variant="info">
-        <i className="fas fa-info-circle me-2"></i>
-        Category is chosen manually by the citizen when the complaint is submitted.
-      </Alert>
 
-      <Card className="border-0 shadow-lg">
+      <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label="Filter by status">
+        {chips.map((s) => (
+          <Button
+            key={s}
+            size="sm"
+            variant={statusFilter === s ? 'success' : 'outline-secondary'}
+            className="text-capitalize"
+            aria-pressed={statusFilter === s}
+            onClick={() => {
+              setStatusFilter(s);
+              setPage(1);
+            }}
+          >
+            {s === 'all' ? 'All' : statusLabel(s)} <Badge bg="light" text="dark">{counts[s]}</Badge>
+          </Button>
+        ))}
+      </div>
+
+      <Card className="border-0 shadow-sm mb-3">
+        <Card.Body>
+          <Row className="g-2">
+            <Col md={4}>
+              <Form.Select
+                aria-label="Filter by category"
+                value={categoryFilter}
+                onChange={(e) => {
+                  setCategoryFilter(e.target.value);
+                  setPage(1);
+                }}
+              >
+                <option value="all">All categories</option>
+                {COMPLAINT_CATEGORIES.map((c) => {
+                  const value = typeof c === 'string' ? c : c.value;
+                  return (
+                    <option key={value} value={value}>
+                      {formatComplaintCategory(value)}
+                    </option>
+                  );
+                })}
+              </Form.Select>
+            </Col>
+            <Col md={8}>
+              <InputGroup>
+                <InputGroup.Text>
+                  <i className="fas fa-search"></i>
+                </InputGroup.Text>
+                <Form.Control
+                  type="search"
+                  aria-label="Search complaints by ID, area or citizen"
+                  placeholder="Search by ID, area or citizen"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(1);
+                  }}
+                />
+              </InputGroup>
+            </Col>
+          </Row>
+        </Card.Body>
+      </Card>
+
+      <Card className="border-0 shadow-sm">
         {isLoading ? (
           <Card.Body className="text-center py-5">
-            <Spinner animation="border" variant="success" />
+            <Spinner animation="border" variant="success" role="status">
+              <span className="visually-hidden">Loading...</span>
+            </Spinner>
           </Card.Body>
-        ) : complaints.length === 0 ? (
+        ) : filtered.length === 0 ? (
           <Card.Body className="text-center py-5">
+            <i className="fas fa-inbox fa-2x text-muted mb-2 d-block"></i>
             <p className="text-muted mb-0">No complaints found</p>
           </Card.Body>
         ) : (
-          <Table responsive className="mb-0">
-            <thead className="table-success">
-              <tr>
-                <th>ID</th>
-                <th>Title</th>
-                <th>Category</th>
-                <th>Status</th>
-                <th>Citizen</th>
-                <th>Area</th>
-                <th>Created</th>
-              </tr>
-            </thead>
-            <tbody>
-              {complaints.map((complaint) => (
-                <tr key={complaint.complaint_id}>
-                  <td className="fw-bold">#{complaint.complaint_id}</td>
-                  <td>{complaint.title}</td>
-                  <td className="text-capitalize">{formatComplaintCategory(complaint.category)}</td>
-                  <td>{getStatusBadge(complaint.status)}</td>
-                  <td>{complaint.citizen_name || '-'}</td>
-                  <td>{complaint.area || '-'}</td>
-                  <td className="small text-muted">{new Date(complaint.created_at).toLocaleString()}</td>
-                </tr>
-              ))}
-            </tbody>
-          </Table>
+          <>
+            <div className="table-responsive">
+              <Table hover className="mb-0 align-middle">
+                <thead className="table-success">
+                  <tr>
+                    <th>ID</th>
+                    <th>Title</th>
+                    <th>Category</th>
+                    <th>Status</th>
+                    <th>Urgency</th>
+                    <th>Citizen</th>
+                    <th>Area</th>
+                    <th>Officer</th>
+                    <th>Created</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageItems.map((c) => (
+                    <tr key={c.complaint_id}>
+                      <td className="fw-bold">#{c.complaint_id}</td>
+                      <td>{c.title}</td>
+                      <td className="text-capitalize">{formatComplaintCategory(c.category)}</td>
+                      <td>
+                        <span className={`badge status-${c.status}`}>{statusLabel(c.status)}</span>
+                      </td>
+                      <td>
+                        {c.urgency_level ? (
+                          <Badge bg={URGENCY_VARIANTS[String(c.urgency_level).toLowerCase()] || 'secondary'} className="text-capitalize">
+                            {c.urgency_level}
+                          </Badge>
+                        ) : (
+                          '-'
+                        )}
+                      </td>
+                      <td>{c.citizen_name || '-'}</td>
+                      <td>{c.area || '-'}</td>
+                      <td>{officerName(c.assigned_officer_id)}</td>
+                      <td className="small text-muted">{c.created_at ? new Date(c.created_at).toLocaleString() : '-'}</td>
+                      <td>
+                        <Button
+                          size="sm"
+                          variant={c.assigned_officer_id ? 'outline-primary' : 'success'}
+                          disabled={submitting}
+                          onClick={() => openAssign(c)}
+                          aria-label={`${c.assigned_officer_id ? 'Reassign' : 'Assign'} complaint ${c.complaint_id}`}
+                        >
+                          {c.assigned_officer_id ? 'Reassign' : 'Assign'}
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </Table>
+            </div>
+            <Card.Footer className="bg-white d-flex flex-wrap justify-content-between align-items-center gap-2">
+              <small className="text-muted">
+                Showing {(currentPage - 1) * PAGE_SIZE + 1}-{Math.min(currentPage * PAGE_SIZE, filtered.length)} of {filtered.length}
+              </small>
+              <Pagination size="sm" className="mb-0">
+                <Pagination.Prev disabled={currentPage === 1} onClick={() => setPage(currentPage - 1)} />
+                <Pagination.Item active>
+                  {currentPage} / {totalPages}
+                </Pagination.Item>
+                <Pagination.Next disabled={currentPage === totalPages} onClick={() => setPage(currentPage + 1)} />
+              </Pagination>
+            </Card.Footer>
+          </>
         )}
       </Card>
+
+      <Modal show={!!target} onHide={closeAssign} centered>
+        <Form onSubmit={handleAssign}>
+          <Modal.Header closeButton={!submitting}>
+            <Modal.Title>
+              {target?.assigned_officer_id ? 'Reassign' : 'Assign'} Complaint #{target?.complaint_id}
+            </Modal.Title>
+          </Modal.Header>
+          <Modal.Body>
+            {target && <p className="text-muted">{target.title}</p>}
+            <Form.Group controlId="assign-officer">
+              <Form.Label>Officer</Form.Label>
+              <Form.Select
+                aria-label="Select officer"
+                value={officerId}
+                onChange={(e) => setOfficerId(e.target.value)}
+                disabled={submitting}
+              >
+                <option value="">Select an officer...</option>
+                {officers.map((o) => (
+                  <option key={o.officer_id} value={o.officer_id}>
+                    {o.name} - {o.ward_name || 'No ward'} ({o.active_complaints ?? 0} active)
+                  </option>
+                ))}
+              </Form.Select>
+              {officers.length === 0 && <Form.Text className="text-muted">No active officers available.</Form.Text>}
+            </Form.Group>
+          </Modal.Body>
+          <Modal.Footer>
+            <Button variant="outline-secondary" onClick={closeAssign} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="success" disabled={submitting || !officerId}>
+              {submitting ? (
+                <>
+                  <Spinner as="span" animation="border" size="sm" className="me-2" />
+                  Saving...
+                </>
+              ) : (
+                'Confirm'
+              )}
+            </Button>
+          </Modal.Footer>
+        </Form>
+      </Modal>
     </Container>
   );
 }

@@ -9,7 +9,13 @@ dotenv.config();
 // Verify JWT Token
 const verifyToken = (req, res, next) => {
   try {
-    const token = req.headers.authorization?.split(' ')[1];
+    const [scheme, token] = (req.headers.authorization || '').split(' ');
+    if (scheme !== 'Bearer') {
+      return res.status(401).json({
+        success: false,
+        error: 'No token provided',
+      });
+    }
     
     if (!token) {
       return res.status(401).json({

@@ -17,10 +17,10 @@ function OfficerProfile() {
 
   const loadProfileAndMetrics = async () => {
     try {
-      const profileResponse = await apiClient.get(`/officers/${user?.user_id}`);
-      setProfile(profileResponse.data);
+      const profileResponse = await apiClient.get('/officers/me');
+      setProfile(profileResponse.data.officer);
 
-      const metricsResponse = await apiClient.get(`/officers/${user?.user_id}/metrics`);
+      const metricsResponse = await apiClient.get('/officers/me/metrics');
       setMetrics(metricsResponse.data.metrics);
     } catch (error) {
       toast.error('Failed to load profile');

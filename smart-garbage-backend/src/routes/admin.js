@@ -216,16 +216,23 @@ router.get('/audit-logs', verifyToken, checkRole('admin'), async (req, res) => {
   }
 });
 
-// Export report data (CSV-friendly format)
+// CSV cell escaping (quotes, commas, newlines) + spreadsheet formula-injection guard
+const csvCell = (value) => {
+  if (value === null || value === undefined) return '';
+  let text = value instanceof Date ? value.toISOString() : String(value);
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  return /[",\r\n]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+};
+
+// Export report data as CSV
 router.get('/report/export', verifyToken, checkRole('admin'), async (req, res) => {
   try {
-    const { status, dateFrom, dateTo } = req.query;
+    const { status, category, ward_id, dateFrom, dateTo } = req.query;
 
     let query = `
-      SELECT 
-        c.complaint_id, c.title, c.description,
-        u.name as citizen_name, u.phone as citizen_phone,
-        c.category, c.urgency_level, c.status,
+      SELECT
+        c.complaint_id, c.title, u.name as citizen_name,
+        c.category, c.urgency_level, c.status, c.area,
         c.created_at, c.assigned_at, c.resolved_at,
         o_user.name as officer_name,
         w.name as ward_name
@@ -238,43 +245,36 @@ router.get('/report/export', verifyToken, checkRole('admin'), async (req, res) =
     `;
 
     const params = [];
-    let paramIndex = 1;
+    const add = (clause, value) => {
+      params.push(value);
+      query += ` AND ${clause.replace('?', `$${params.length}`)}`;
+    };
 
-    if (status) {
-      query += ` AND c.status = $${paramIndex}`;
-      params.push(status);
-      paramIndex++;
+    if (status) add('c.status = ?', status);
+    if (category) add('c.category = ?', category);
+    if (ward_id && Number.isInteger(Number(ward_id))) add('c.ward_id = ?', Number(ward_id));
+    if (dateFrom && !isNaN(new Date(dateFrom))) add('c.created_at >= ?', new Date(dateFrom));
+    if (dateTo && !isNaN(new Date(dateTo))) {
+      const end = new Date(dateTo);
+      end.setHours(23, 59, 59, 999);
+      add('c.created_at <= ?', end);
     }
 
-    if (dateFrom) {
-      query += ` AND c.created_at >= $${paramIndex}`;
-      params.push(new Date(dateFrom));
-      paramIndex++;
-    }
-
-    if (dateTo) {
-      query += ` AND c.created_at <= $${paramIndex}`;
-      params.push(new Date(dateTo));
-      paramIndex++;
-    }
-
-    query += ` ORDER BY c.created_at DESC`;
+    query += ' ORDER BY c.created_at DESC';
 
     const data = await db.manyOrNone(query, params);
 
-    // Set CSV headers
-    res.setHeader('Content-Type', 'text/csv');
+    const header = ['Complaint ID', 'Title', 'Citizen', 'Category', 'Urgency', 'Status', 'Area', 'Ward', 'Officer', 'Created At', 'Assigned At', 'Resolved At'];
+    const lines = data.map((r) =>
+      [r.complaint_id, r.title, r.citizen_name, r.category, r.urgency_level, r.status, r.area,
+        r.ward_name || 'Unknown', r.officer_name || 'Unassigned', r.created_at, r.assigned_at, r.resolved_at]
+        .map(csvCell)
+        .join(',')
+    );
+
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
     res.setHeader('Content-Disposition', 'attachment; filename="complaints-report.csv"');
-
-    // CSV header row
-    let csv = 'Complaint ID,Title,Citizen Name,Category,Urgency,Status,Created At,Assigned At,Resolved At,Officer Name,Ward\n';
-
-    // Data rows
-    data.forEach(row => {
-      csv += `${row.complaint_id},"${row.title}",${row.citizen_name},"${row.category}","${row.urgency_level}","${row.status}","${row.created_at}","${row.assigned_at}","${row.resolved_at}","${row.officer_name || 'Unassigned'}","${row.ward_name || 'Unknown'}"\n`;
-    });
-
-    res.send(csv);
+    res.send('﻿' + [header.join(','), ...lines].join('\r\n') + '\r\n');
   } catch (error) {
     res.status(400).json({
       success: false,

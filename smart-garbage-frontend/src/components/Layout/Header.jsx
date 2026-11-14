@@ -1,7 +1,7 @@
 // src/components/Layout/Header.jsx
 import React from 'react';
 import { Navbar, Nav, Container, Dropdown } from 'react-bootstrap';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import './Header.css';
 
@@ -23,23 +23,23 @@ function Header() {
     <Navbar bg="success" expand="lg" sticky="top" className="navbar-dark">
       <Container>
         <Navbar.Brand as={Link} to={getDashboardLink()} className="fw-bold">
-          <i className="fas fa-trash me-2"></i>
+          <i className="fas fa-recycle me-2"></i>
           Smart Garbage System
         </Navbar.Brand>
-        <Navbar.Toggle aria-controls="basic-navbar-nav" />
+        <Navbar.Toggle aria-controls="basic-navbar-nav" aria-label="Toggle navigation" />
         <Navbar.Collapse id="basic-navbar-nav">
           <Nav className="ms-auto">
             {isAuthenticated ? (
               <>
                 {user?.role === 'citizen' && (
                   <>
-                    <Nav.Link as={Link} to="/citizen/dashboard">
+                    <Nav.Link as={NavLink} to="/citizen/dashboard">
                       Dashboard
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/citizen/complaint/new">
+                    <Nav.Link as={NavLink} to="/citizen/complaint/new">
                       Report Issue
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/citizen/complaints">
+                    <Nav.Link as={NavLink} to="/citizen/complaints">
                       My Complaints
                     </Nav.Link>
                   </>
@@ -47,13 +47,13 @@ function Header() {
 
                 {user?.role === 'officer' && (
                   <>
-                    <Nav.Link as={Link} to="/officer/dashboard">
+                    <Nav.Link as={NavLink} to="/officer/dashboard">
                       Dashboard
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/officer/map">
+                    <Nav.Link as={NavLink} to="/officer/map">
                       Map View
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/officer/complaints">
+                    <Nav.Link as={NavLink} to="/officer/complaints">
                       Assigned Work
                     </Nav.Link>
                   </>
@@ -61,17 +61,23 @@ function Header() {
 
                 {user?.role === 'admin' && (
                   <>
-                    <Nav.Link as={Link} to="/admin/dashboard">
+                    <Nav.Link as={NavLink} to="/admin/dashboard">
                       Dashboard
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/admin/complaints">
+                    <Nav.Link as={NavLink} to="/admin/complaints">
                       Complaints
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/admin/officers">
+                    <Nav.Link as={NavLink} to="/admin/officers">
                       Officers
                     </Nav.Link>
-                    <Nav.Link as={Link} to="/admin/analytics">
+                    <Nav.Link as={NavLink} to="/admin/wards">
+                      Wards
+                    </Nav.Link>
+                    <Nav.Link as={NavLink} to="/admin/analytics">
                       Analytics
+                    </Nav.Link>
+                    <Nav.Link as={NavLink} to="/admin/reports">
+                      Reports
                     </Nav.Link>
                   </>
                 )}
@@ -79,15 +85,19 @@ function Header() {
                 <Dropdown align="end">
                   <Dropdown.Toggle variant="light" id="user-dropdown">
                     <i className="fas fa-user me-2"></i>
-                    {user?.name}
+                    {user?.name || user?.email}
                   </Dropdown.Toggle>
 
                   <Dropdown.Menu>
-                    <Dropdown.Item as={Link} to={user?.role === 'officer' ? '/officer/profile' : '#'}>
-                      <i className="fas fa-cog me-2"></i>
-                      Profile
-                    </Dropdown.Item>
-                    <Dropdown.Divider />
+                    {user?.role === 'officer' && (
+                      <>
+                        <Dropdown.Item as={Link} to="/officer/profile">
+                          <i className="fas fa-cog me-2"></i>
+                          Profile
+                        </Dropdown.Item>
+                        <Dropdown.Divider />
+                      </>
+                    )}
                     <Dropdown.Item onClick={handleLogout}>
                       <i className="fas fa-sign-out-alt me-2"></i>
                       Logout
@@ -97,10 +107,10 @@ function Header() {
               </>
             ) : (
               <>
-                <Nav.Link as={Link} to="/login">
+                <Nav.Link as={NavLink} to="/login">
                   Login
                 </Nav.Link>
-                <Nav.Link as={Link} to="/register">
+                <Nav.Link as={NavLink} to="/register">
                   Register
                 </Nav.Link>
               </>

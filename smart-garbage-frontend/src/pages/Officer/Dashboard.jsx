@@ -21,11 +21,11 @@ function OfficerDashboard() {
 
   const loadStats = async () => {
     try {
-      const response = await apiClient.get(`/officer/complaints`);
+      const response = await apiClient.get('/complaints/officer/assigned');
       const complaints = response.data.data || [];
 
       setStats({
-        pending_count: complaints.filter((c) => c.status === 'pending').length,
+        pending_count: complaints.filter((c) => c.status === 'assigned' || c.status === 'pending').length,
         in_progress_count: complaints.filter((c) => c.status === 'in_progress').length,
         resolved_count: complaints.filter((c) => c.status === 'resolved').length,
       });
@@ -35,6 +35,9 @@ function OfficerDashboard() {
       setIsLoading(false);
     }
   };
+
+  const total = stats.pending_count + stats.in_progress_count + stats.resolved_count;
+  const resolutionRate = total ? Math.round((stats.resolved_count / total) * 100) : 0;
 
   const StatCard = ({ icon, title, count, color, link }) => (
     <Link to={link} className="text-decoration-none">
@@ -147,14 +150,25 @@ function OfficerDashboard() {
                   <div className="mb-3">
                     <p className="small text-muted mb-1">Resolution Rate</p>
                     <div className="progress">
-                      <div className="progress-bar bg-success" style={{ width: '85%' }}>
-                        85%
+                      <div
+                        className="progress-bar bg-success"
+                        role="progressbar"
+                        aria-valuenow={resolutionRate}
+                        aria-valuemin="0"
+                        aria-valuemax="100"
+                        style={{ width: `${resolutionRate}%` }}
+                      >
+                        {resolutionRate}%
                       </div>
                     </div>
                   </div>
                   <p className="small">
                     <i className="fas fa-info-circle me-2"></i>
-                    Keep up the excellent work!
+                    {total === 0
+                      ? 'No complaints assigned yet.'
+                      : resolutionRate >= 70
+                      ? 'Keep up the excellent work!'
+                      : `${stats.resolved_count} of ${total} assigned complaints resolved.`}
                   </p>
                 </Card.Body>
               </Card>
