@@ -9,7 +9,6 @@ function AdminOfficers() {
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [isEditing, setIsEditing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
 
   const [formData, setFormData] = useState({
@@ -65,7 +64,6 @@ function AdminOfficers() {
       year_of_joining: new Date().getFullYear(),
     });
     setErrors({});
-    setIsEditing(false);
   };
 
   const handleAddOfficer = async (e) => {

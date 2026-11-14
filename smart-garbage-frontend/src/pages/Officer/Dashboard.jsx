@@ -1,6 +1,6 @@
 // src/pages/Officer/Dashboard.jsx
 import React, { useMemo } from 'react';
-import { Container, Row, Col, Card, Button, Alert, Spinner } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useAssignedComplaints } from '../../hooks/useComplaints';
 import { useAuth } from '../../context/AuthContext';

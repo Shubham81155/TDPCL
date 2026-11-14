@@ -91,9 +91,11 @@ export const getAddressFromCoordinates = async (latitude, longitude) => {
   }
 };
 
-export default {
+const locationUtils = {
   getCurrentLocation,
   calculateDistance,
   formatCoordinates,
   getAddressFromCoordinates,
 };
+
+export default locationUtils;

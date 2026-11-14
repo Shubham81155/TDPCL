@@ -1,6 +1,6 @@
 // src/pages/Officer/Profile.jsx
 import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Form, Button, Spinner, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Form, Spinner } from 'react-bootstrap';
 import { useAuth } from '../../context/AuthContext';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
@@ -68,8 +68,8 @@ function OfficerProfile() {
                 </Col>
 
                 <Col md={9}>
-                  <h4 className="fw-bold mb-1">{user?.name}</h4>
-                  <p className="text-muted mb-3">Officer ID: {user?.user_id}</p>
+                  <h4 className="fw-bold mb-1">{profile?.name || user?.name}</h4>
+                  <p className="text-muted mb-3">Officer ID: {profile?.employee_id || profile?.officer_id || '-'}</p>
                   <Form>
                     <Form.Group className="mb-3">
                       <Form.Label>Email</Form.Label>
@@ -78,12 +78,17 @@ function OfficerProfile() {
 
                     <Form.Group className="mb-3">
                       <Form.Label>Phone</Form.Label>
-                      <Form.Control type="tel" placeholder="Phone number" disabled />
+                      <Form.Control type="tel" value={profile?.phone || ''} placeholder="Phone number" disabled />
                     </Form.Group>
 
                     <Form.Group className="mb-3">
                       <Form.Label>Assigned Ward</Form.Label>
-                      <Form.Control type="text" placeholder="Ward assignment" disabled />
+                      <Form.Control
+                        type="text"
+                        value={profile?.ward_name || profile?.assigned_area_name || ''}
+                        placeholder="Ward assignment"
+                        disabled
+                      />
                     </Form.Group>
                   </Form>
                 </Col>

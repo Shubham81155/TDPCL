@@ -1,6 +1,7 @@
 // src/components/Layout/Footer.jsx
 import React from 'react';
 import { Container, Row, Col } from 'react-bootstrap';
+import { Link } from 'react-router-dom';
 import './Footer.css';
 
 function Footer() {
@@ -24,19 +25,19 @@ function Footer() {
             <h6 className="fw-bold mb-2">Quick Links</h6>
             <ul className="list-unstyled small">
               <li>
-                <a href="#" className="text-decoration-none text-light">
+                <Link to="/" className="text-decoration-none text-light">
                   Home
-                </a>
+                </Link>
               </li>
               <li>
-                <a href="#" className="text-decoration-none text-light">
+                <span className="text-decoration-none text-light">
                   About
-                </a>
+                </span>
               </li>
               <li>
-                <a href="#" className="text-decoration-none text-light">
+                <span className="text-decoration-none text-light">
                   Contact
-                </a>
+                </span>
               </li>
             </ul>
           </Col>
@@ -55,18 +56,18 @@ function Footer() {
           <Col md={3} sm={6} className="mb-3">
             <h6 className="fw-bold mb-2">Follow Us</h6>
             <div>
-              <a href="#" className="text-light me-3">
+              <span className="text-light me-3">
                 <i className="fab fa-facebook-f"></i>
-              </a>
-              <a href="#" className="text-light me-3">
+              </span>
+              <span className="text-light me-3">
                 <i className="fab fa-twitter"></i>
-              </a>
-              <a href="#" className="text-light me-3">
+              </span>
+              <span className="text-light me-3">
                 <i className="fab fa-instagram"></i>
-              </a>
-              <a href="#" className="text-light">
+              </span>
+              <span className="text-light">
                 <i className="fab fa-linkedin-in"></i>
-              </a>
+              </span>
             </div>
           </Col>
         </Row>
@@ -78,13 +79,13 @@ function Footer() {
             <p>
               &copy; {currentYear} Smart Garbage System. All rights reserved.
               <br />
-              <a href="#" className="text-decoration-none text-light">
+              <span className="text-decoration-none text-light">
                 Privacy Policy
-              </a>
+              </span>
               |
-              <a href="#" className="text-decoration-none text-light ms-2">
+              <span className="text-decoration-none text-light ms-2">
                 Terms of Service
-              </a>
+              </span>
             </p>
           </Col>
         </Row>
