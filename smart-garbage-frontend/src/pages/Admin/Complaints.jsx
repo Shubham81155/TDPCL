@@ -1,7 +1,8 @@
 // src/pages/Admin/Complaints.jsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { Container, Card, Table, Spinner, Badge, Button, Modal, Form, Row, Col, InputGroup, Pagination } from 'react-bootstrap';
-import apiClient from '../../services/api';
+import { useAdminComplaints, useActiveOfficers, useAssignComplaint } from '../../hooks/useComplaints';
+import StatusBadge from '../../components/common/StatusBadge';
 import toast from 'react-hot-toast';
 import { formatComplaintCategory, COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
 
@@ -12,9 +13,11 @@ const URGENCY_VARIANTS = { critical: 'danger', high: 'danger', medium: 'warning'
 const statusLabel = (s) => (s ? s.replace(/_/g, ' ') : 'unknown');
 
 function AdminComplaints() {
-  const [complaints, setComplaints] = useState([]);
-  const [officers, setOfficers] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
+  const { data: complaintsData, isLoading } = useAdminComplaints();
+  const { data: officersData } = useActiveOfficers();
+  const assignComplaint = useAssignComplaint();
+  const complaints = useMemo(() => complaintsData || [], [complaintsData]);
+  const officers = useMemo(() => officersData || [], [officersData]);
   const [statusFilter, setStatusFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
   const [search, setSearch] = useState('');
@@ -23,31 +26,6 @@ function AdminComplaints() {
   const [target, setTarget] = useState(null);
   const [officerId, setOfficerId] = useState('');
   const [submitting, setSubmitting] = useState(false);
-
-  const loadComplaints = useCallback(async () => {
-    try {
-      const response = await apiClient.get('/admin/complaints');
-      setComplaints(response.data?.data || []);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to load complaints');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  const loadOfficers = useCallback(async () => {
-    try {
-      const response = await apiClient.get('/officers?status=active');
-      setOfficers(response.data?.data || []);
-    } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to load officers');
-    }
-  }, []);
-
-  useEffect(() => {
-    loadComplaints();
-    loadOfficers();
-  }, [loadComplaints, loadOfficers]);
 
   const officerName = useCallback(
     (id) => {
@@ -104,12 +82,9 @@ function AdminComplaints() {
     }
     setSubmitting(true);
     try {
-      await apiClient.post(`/assignments/assign/${target.complaint_id}`, {
-        officer_id: Number(officerId),
-      });
+      await assignComplaint.mutateAsync({ complaintId: target.complaint_id, officerId });
       toast.success(`Complaint #${target.complaint_id} assigned`);
       setTarget(null);
-      await Promise.all([loadComplaints(), loadOfficers()]);
     } catch (err) {
       toast.error(err.response?.data?.error || 'Failed to assign complaint');
     } finally {
@@ -225,7 +200,7 @@ function AdminComplaints() {
                       <td>{c.title}</td>
                       <td className="text-capitalize">{formatComplaintCategory(c.category)}</td>
                       <td>
-                        <span className={`badge status-${c.status}`}>{statusLabel(c.status)}</span>
+                        <StatusBadge status={c.status} />
                       </td>
                       <td>
                         {c.urgency_level ? (

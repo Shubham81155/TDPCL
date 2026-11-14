@@ -1,5 +1,6 @@
 // src/config/database.js
 // PostgreSQL Database Connection with PostGIS
+// Importing this module never connects and never exits the process; use checkConnection() at boot.
 
 const pgPromise = require('pg-promise');
 const dotenv = require('dotenv');
@@ -19,18 +20,18 @@ const connection = {
   ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
 };
 
-// Create database connection pool
+// Create database connection pool (lazy: no connection is made until first query)
 const db = pgp(connection);
 
-// Test connection
-db.connect()
-  .then(obj => {
-    console.log('✅ Database connection established');
+// Verifies the database is reachable. Resolves true or rejects with the connection error.
+const checkConnection = async () => {
+  const obj = await db.connect();
+  try {
+    await obj.one('SELECT 1 AS ok');
+  } finally {
     obj.done();
-  })
-  .catch(error => {
-    console.error('❌ Database connection error:', error);
-    process.exit(1);
-  });
+  }
+  return true;
+};
 
-module.exports = { db, pgp };
+module.exports = { db, pgp, checkConnection };

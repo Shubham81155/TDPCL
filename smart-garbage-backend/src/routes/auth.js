@@ -6,22 +6,17 @@ const router = express.Router();
 const authService = require('../services/authService');
 const { verifyToken } = require('../middleware/auth');
 const { validateRequest, schemas } = require('../middleware/validator');
+const { createRateLimiter } = require('../middleware/rateLimit');
 
-// Minimal in-memory brute-force protection: 10 attempts / 15 min per IP+path
-// (a successful login clears the counter, so only failures accumulate)
-const attempts = new Map();
-const rateLimit = (req, res, next) => {
-  const key = `${req.ip}:${req.path}`;
-  const now = Date.now();
-  const entry = attempts.get(key) || { count: 0, reset: now + 15 * 60 * 1000 };
-  if (now > entry.reset) { entry.count = 0; entry.reset = now + 15 * 60 * 1000; }
-  entry.count += 1;
-  attempts.set(key, entry);
-  if (entry.count > 10) {
-    return res.status(429).json({ success: false, error: 'Too many attempts. Try again later.' });
-  }
-  next();
-};
+// Brute-force protection: 10 attempts / 15 min per IP+path (a successful login clears the counter,
+// so only failures accumulate)
+const authLimiter = createRateLimiter({
+  windowMs: 15 * 60 * 1000,
+  max: 10,
+  keyFn: (req) => `${req.ip}:${req.path}`,
+  message: 'Too many attempts. Try again later.',
+});
+const rateLimit = authLimiter;
 
 // Register new citizen
 router.post('/register', rateLimit, validateRequest(schemas.registerUser), async (req, res) => {
@@ -45,7 +40,7 @@ router.post('/login', rateLimit, validateRequest(schemas.loginUser), async (req,
   try {
     const { email, password } = req.body;
     const result = await authService.loginUser(email, password);
-    attempts.delete(`${req.ip}:${req.path}`); // only failed attempts count toward the limit
+    authLimiter.reset(req); // only failed attempts count toward the limit
     res.json({
       success: true,
       message: 'Login successful',

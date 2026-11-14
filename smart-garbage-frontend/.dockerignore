@@ -1,0 +1,11 @@
+node_modules
+build
+coverage
+cypress
+cypress.config.js
+.env
+.env.*
+npm-debug.log
+.git
+Dockerfile
+.dockerignore

@@ -10,6 +10,11 @@ const path = require('path');
 require('dotenv').config({ path: path.resolve(__dirname, '../../.env') });
 const { db, pgp } = require('../../src/config/database');
 
+// Development-only data (sample complaints, known test accounts). Never applied
+// automatically in production; set RUN_SEED_MIGRATIONS=true to force it.
+const SEED_FILES = new Set(['002_sample_data.sql', '003_test_users.sql']);
+const skipSeeds = process.env.NODE_ENV === 'production' && process.env.RUN_SEED_MIGRATIONS !== 'true';
+
 const BASELINE = [
   '001_initial_schema.sql',
   '002_sample_data.sql',
@@ -39,6 +44,10 @@ const BASELINE = [
     let ran = 0;
     for (const file of files) {
       if (applied.has(file)) continue;
+      if (skipSeeds && SEED_FILES.has(file)) {
+        console.log(`Skipped ${file} (development seed data; NODE_ENV=production)`);
+        continue;
+      }
       const sql = fs.readFileSync(path.join(__dirname, file), 'utf8');
       await db.tx(async (t) => {
         await t.none(sql);

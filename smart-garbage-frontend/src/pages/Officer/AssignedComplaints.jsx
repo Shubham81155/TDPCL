@@ -1,48 +1,30 @@
 // src/pages/Officer/AssignedComplaints.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { Container, Row, Col, Card, Table, Badge, Button, Form, Spinner, Modal, Pagination } from 'react-bootstrap';
-import apiClient from '../../services/api';
+import { useAssignedComplaints, useUpdateComplaintStatus } from '../../hooks/useComplaints';
 import toast from 'react-hot-toast';
 import { formatComplaintCategory } from '../../utils/classificationUtils';
 
 function AssignedComplaints() {
-  const [complaints, setComplaints] = useState([]);
-  const [filteredComplaints, setFilteredComplaints] = useState([]);
   const [filters, setFilters] = useState({ status: '' });
-  const [isLoading, setIsLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [statusUpdate, setStatusUpdate] = useState('');
   const pageSize = 10;
+  const { data, isLoading } = useAssignedComplaints({
+    onError: () => toast.error('Failed to load assigned complaints'),
+  });
+  const updateStatus = useUpdateComplaintStatus();
+
+  const filteredComplaints = useMemo(
+    () => (data || []).filter((c) => !filters.status || c.status === filters.status),
+    [data, filters]
+  );
 
   useEffect(() => {
-    loadAssignedComplaints();
-  }, []);
-
-  useEffect(() => {
-    applyFilters();
-  }, [complaints, filters]);
-
-  const loadAssignedComplaints = async () => {
-    try {
-      const response = await apiClient.get('/complaints/officer/assigned');
-      setComplaints(response.data.data || []);
-    } catch (error) {
-      toast.error('Failed to load assigned complaints');
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const applyFilters = () => {
-    let filtered = complaints;
-    if (filters.status) {
-      filtered = filtered.filter((c) => c.status === filters.status);
-    }
-    setFilteredComplaints(filtered);
     setCurrentPage(1);
-  };
+  }, [filters]);
 
   const handleFilterChange = (e) => {
     const { name, value } = e.target;
@@ -56,12 +38,12 @@ function AssignedComplaints() {
     }
 
     try {
-      await apiClient.patch(`/complaints/${selectedComplaint.complaint_id}/status`, {
+      await updateStatus.mutateAsync({
+        complaintId: selectedComplaint.complaint_id,
         status: statusUpdate,
       });
       toast.success('Status updated successfully');
       setShowModal(false);
-      loadAssignedComplaints();
     } catch (error) {
       toast.error('Failed to update status');
     }

@@ -2,6 +2,7 @@
 // Assignment Service - Geolocation-based complaint routing to officers
 
 const { db } = require('../config/database');
+const AppError = require('../utils/AppError');
 
 /**
  * Auto-assign complaint to nearest officer
@@ -19,7 +20,7 @@ const autoAssignComplaint = async (complaintId) => {
     );
 
     if (!complaint) {
-      throw new Error('Complaint not found');
+      throw AppError.notFound('Complaint not found');
     }
 
     // Find best officer using PostGIS
@@ -41,7 +42,7 @@ const autoAssignComplaint = async (complaintId) => {
     );
 
     if (!officer) {
-      throw new Error('No available officers found for this area');
+      throw AppError.conflict('No available officers found for this area');
     }
 
     // Assign complaint to officer
@@ -75,7 +76,7 @@ const autoAssignComplaint = async (complaintId) => {
       },
     };
   } catch (error) {
-    throw new Error(`Auto-assignment failed: ${error.message}`);
+    throw AppError.wrap(error, 'Auto-assignment failed');
   }
 };
 
@@ -105,7 +106,7 @@ const findNearestOfficers = async (latitude, longitude, wardId, limit = 5) => {
 
     return officers;
   } catch (error) {
-    throw new Error(`Failed to find nearby officers: ${error.message}`);
+    throw AppError.wrap(error, 'Failed to find nearby officers');
   }
 };
 
@@ -122,7 +123,7 @@ const manualAssign = async (complaintId, officerId, assignedBy) => {
     );
 
     if (!officer) {
-      throw new Error('Officer not found');
+      throw AppError.notFound('Officer not found');
     }
 
     // Get old assignment
@@ -156,7 +157,7 @@ const manualAssign = async (complaintId, officerId, assignedBy) => {
 
     return updated;
   } catch (error) {
-    throw new Error(`Manual assignment failed: ${error.message}`);
+    throw AppError.wrap(error, 'Manual assignment failed');
   }
 };
 
@@ -179,7 +180,7 @@ const getOfficerWorkload = async (officerId) => {
 
     return workload;
   } catch (error) {
-    throw new Error(`Failed to get workload: ${error.message}`);
+    throw AppError.wrap(error, 'Failed to get workload');
   }
 };
 
@@ -234,7 +235,7 @@ const balanceWorkload = async (wardId) => {
 
     return { message: 'Workload is balanced' };
   } catch (error) {
-    throw new Error(`Workload balancing failed: ${error.message}`);
+    throw AppError.wrap(error, 'Workload balancing failed');
   }
 };
 

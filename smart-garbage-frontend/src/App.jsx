@@ -1,5 +1,5 @@
 // src/App.jsx
-import React from 'react';
+import React, { Suspense, lazy } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { useAuth } from './context/AuthContext';
@@ -8,35 +8,37 @@ import { useAuth } from './context/AuthContext';
 import Header from './components/Layout/Header';
 import Footer from './components/Layout/Footer';
 import ProtectedRoute from './components/ProtectedRoute';
+import ErrorBoundary from './components/common/ErrorBoundary';
+import LoadingState from './components/common/LoadingState';
 
 // Auth Pages
-import LoginPage from './pages/Auth/LoginPage';
-import RegisterPage from './pages/Auth/RegisterPage';
-import ForgotPasswordPage from './pages/Auth/ForgotPasswordPage';
-import ResetPasswordPage from './pages/Auth/ResetPasswordPage';
+const LoginPage = lazy(() => import('./pages/Auth/LoginPage'));
+const RegisterPage = lazy(() => import('./pages/Auth/RegisterPage'));
+const ForgotPasswordPage = lazy(() => import('./pages/Auth/ForgotPasswordPage'));
+const ResetPasswordPage = lazy(() => import('./pages/Auth/ResetPasswordPage'));
 
 // Citizen Pages
-import CitizenDashboard from './pages/Citizen/Dashboard';
-import ComplaintForm from './pages/Citizen/ComplaintForm';
-import ComplaintTracker from './pages/Citizen/ComplaintTracker';
-import ComplaintDetails from './pages/Citizen/ComplaintDetails';
+const CitizenDashboard = lazy(() => import('./pages/Citizen/Dashboard'));
+const ComplaintForm = lazy(() => import('./pages/Citizen/ComplaintForm'));
+const ComplaintTracker = lazy(() => import('./pages/Citizen/ComplaintTracker'));
+const ComplaintDetails = lazy(() => import('./pages/Citizen/ComplaintDetails'));
 
 // Officer Pages
-import OfficerDashboard from './pages/Officer/Dashboard';
-import OfficerMap from './pages/Officer/Map';
-import AssignedComplaints from './pages/Officer/AssignedComplaints';
-import OfficerProfile from './pages/Officer/Profile';
+const OfficerDashboard = lazy(() => import('./pages/Officer/Dashboard'));
+const OfficerMap = lazy(() => import('./pages/Officer/Map'));
+const AssignedComplaints = lazy(() => import('./pages/Officer/AssignedComplaints'));
+const OfficerProfile = lazy(() => import('./pages/Officer/Profile'));
 
 // Admin Pages
-import AdminDashboard from './pages/Admin/Dashboard';
-import AdminComplaints from './pages/Admin/Complaints';
-import AdminOfficers from './pages/Admin/Officers';
-import AdminWards from './pages/Admin/Wards';
-import AdminAnalytics from './pages/Admin/Analytics';
-import AdminReports from './pages/Admin/Reports';
+const AdminDashboard = lazy(() => import('./pages/Admin/Dashboard'));
+const AdminComplaints = lazy(() => import('./pages/Admin/Complaints'));
+const AdminOfficers = lazy(() => import('./pages/Admin/Officers'));
+const AdminWards = lazy(() => import('./pages/Admin/Wards'));
+const AdminAnalytics = lazy(() => import('./pages/Admin/Analytics'));
+const AdminReports = lazy(() => import('./pages/Admin/Reports'));
 
 // 404 Page
-import NotFound from './pages/NotFound';
+const NotFound = lazy(() => import('./pages/NotFound'));
 
 function App() {
   const { isLoading } = useAuth();
@@ -53,10 +55,15 @@ function App() {
 
   return (
     <Router>
+      <a href="#main-content" className="skip-link visually-hidden-focusable">
+        Skip to main content
+      </a>
       <Toaster position="top-right" />
       <div className="d-flex flex-column min-vh-100">
         <Header />
-        <main className="flex-grow-1 py-4">
+        <main id="main-content" tabIndex={-1} className="flex-grow-1 py-4">
+          <ErrorBoundary>
+          <Suspense fallback={<LoadingState label="Loading page" fullPage />}>
           <Routes>
             {/* Auth Routes */}
             <Route path="/login" element={<LoginPage />} />
@@ -186,6 +193,8 @@ function App() {
             <Route path="/" element={<Navigate to="/citizen/dashboard" replace />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
+          </Suspense>
+          </ErrorBoundary>
         </main>
         <Footer />
       </div>

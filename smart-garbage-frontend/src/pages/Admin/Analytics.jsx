@@ -1,6 +1,6 @@
 // src/pages/Admin/Analytics.jsx
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { Container, Row, Col, Card, Spinner, Button, Alert } from 'react-bootstrap';
+import React, { useMemo } from 'react';
+import { Container, Row, Col, Card } from 'react-bootstrap';
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -10,8 +10,10 @@ import {
   Legend,
 } from 'chart.js';
 import { Bar } from 'react-chartjs-2';
-import apiClient from '../../services/api';
-import toast from 'react-hot-toast';
+import { useAdminAnalytics } from '../../hooks/useAdminStats';
+import { errorMessage } from '../../hooks/queryUtils';
+import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import { formatComplaintCategory } from '../../utils/classificationUtils';
 
 ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
@@ -53,60 +55,42 @@ function ChartCard({ title, headerColor, empty, label, children }) {
 }
 
 function AdminAnalytics() {
-  const [categoryStats, setCategoryStats] = useState([]);
-  const [wardStats, setWardStats] = useState([]);
-  const [officers, setOfficers] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const { data, isLoading, error: queryError, refetch } = useAdminAnalytics();
+  const error = queryError ? errorMessage(queryError, 'Failed to load analytics') : null;
 
-  const loadAnalytics = useCallback(async () => {
-    setIsLoading(true);
-    setError(null);
-    try {
-      const [categoryRes, wardRes, officersRes] = await Promise.all([
-        apiClient.get('/admin/stats/by-category'),
-        apiClient.get('/admin/stats/by-ward'),
-        apiClient.get('/admin/stats/officer-performance?limit=10'),
-      ]);
-
-      setCategoryStats(
-        (categoryRes.data.data || []).map((c) => ({
-          label: formatComplaintCategory(c.category),
-          count: num(c.count),
-          resolved: num(c.resolved),
-        }))
-      );
-      setWardStats(
-        (wardRes.data.data || []).map((w) => ({
-          id: w.ward_id,
-          name: w.name,
-          total: num(w.total_complaints),
-          resolved: num(w.resolved),
-          officers: num(w.officer_count),
-        }))
-      );
-      setOfficers(
-        (officersRes.data.data || []).map((o) => ({
-          id: o.officer_id,
-          name: o.officer_name || 'Unknown',
-          total: num(o.total_complaints),
-          resolved: num(o.resolved),
-          active: num(o.active),
-          avgHours: o.avg_resolution_hours == null ? null : num(o.avg_resolution_hours),
-          rate: num(o.resolution_rate),
-        }))
-      );
-    } catch (err) {
-      setError(err?.response?.data?.error || 'Failed to load analytics');
-      toast.error('Failed to load analytics');
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAnalytics();
-  }, [loadAnalytics]);
+  const categoryStats = useMemo(
+    () =>
+      (data?.categories || []).map((c) => ({
+        label: formatComplaintCategory(c.category),
+        count: num(c.count),
+        resolved: num(c.resolved),
+      })),
+    [data]
+  );
+  const wardStats = useMemo(
+    () =>
+      (data?.wards || []).map((w) => ({
+        id: w.ward_id,
+        name: w.name,
+        total: num(w.total_complaints),
+        resolved: num(w.resolved),
+        officers: num(w.officer_count),
+      })),
+    [data]
+  );
+  const officers = useMemo(
+    () =>
+      (data?.officers || []).map((o) => ({
+        id: o.officer_id,
+        name: o.officer_name || 'Unknown',
+        total: num(o.total_complaints),
+        resolved: num(o.resolved),
+        active: num(o.active),
+        avgHours: o.avg_resolution_hours == null ? null : num(o.avg_resolution_hours),
+        rate: num(o.resolution_rate),
+      })),
+    [data]
+  );
 
   const categoryChart = useMemo(
     () => ({
@@ -145,20 +129,9 @@ function AdminAnalytics() {
       </h2>
 
       {isLoading ? (
-        <div className="text-center py-5" role="status" aria-live="polite">
-          <Spinner animation="border" variant="success" />
-          <span className="visually-hidden">Loading analytics</span>
-        </div>
+        <LoadingState label="Loading analytics" />
       ) : error ? (
-        <Alert variant="danger" className="d-flex flex-wrap align-items-center justify-content-between gap-2">
-          <span>
-            <i className="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
-            {error}
-          </span>
-          <Button variant="outline-danger" size="sm" onClick={loadAnalytics}>
-            <i className="fas fa-redo me-1" aria-hidden="true"></i>Retry
-          </Button>
-        </Alert>
+        <ErrorState message={error} onRetry={() => refetch()} />
       ) : (
         <>
           <Row className="g-3 mb-4">

@@ -6,6 +6,7 @@ import apiClient from '../../services/api';
 import { getCurrentLocation } from '../../utils/locationUtils';
 import { COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
 import toast from 'react-hot-toast';
+import { queryClient } from '../../queryClient';
 
 function ComplaintForm() {
   const [formData, setFormData] = useState({
@@ -100,6 +101,8 @@ function ComplaintForm() {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
 
+      queryClient.invalidateQueries('complaints');
+      queryClient.invalidateQueries('admin');
       toast.success(response.data?.message || 'Complaint submitted successfully');
       navigate('/citizen/complaints');
     } catch (error) {

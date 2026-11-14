@@ -1,40 +1,22 @@
 // src/pages/Officer/Dashboard.jsx
-import React, { useState, useEffect } from 'react';
+import React, { useMemo } from 'react';
 import { Container, Row, Col, Card, Button, Alert, Spinner } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
-import apiClient from '../../services/api';
+import { useAssignedComplaints } from '../../hooks/useComplaints';
 import { useAuth } from '../../context/AuthContext';
-import toast from 'react-hot-toast';
 
 function OfficerDashboard() {
-  const [stats, setStats] = useState({
-    pending_count: 0,
-    in_progress_count: 0,
-    resolved_count: 0,
-  });
-  const [isLoading, setIsLoading] = useState(true);
+  const { data, isLoading } = useAssignedComplaints();
   const { user } = useAuth();
 
-  useEffect(() => {
-    loadStats();
-  }, []);
-
-  const loadStats = async () => {
-    try {
-      const response = await apiClient.get('/complaints/officer/assigned');
-      const complaints = response.data.data || [];
-
-      setStats({
-        pending_count: complaints.filter((c) => c.status === 'assigned' || c.status === 'pending').length,
-        in_progress_count: complaints.filter((c) => c.status === 'in_progress').length,
-        resolved_count: complaints.filter((c) => c.status === 'resolved').length,
-      });
-    } catch (error) {
-      console.error('Failed to load stats');
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const stats = useMemo(() => {
+    const complaints = data || [];
+    return {
+      pending_count: complaints.filter((c) => c.status === 'assigned' || c.status === 'pending').length,
+      in_progress_count: complaints.filter((c) => c.status === 'in_progress').length,
+      resolved_count: complaints.filter((c) => c.status === 'resolved').length,
+    };
+  }, [data]);
 
   const total = stats.pending_count + stats.in_progress_count + stats.resolved_count;
   const resolutionRate = total ? Math.round((stats.resolved_count / total) * 100) : 0;

@@ -3,6 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { Container, Table, Button, Form, Modal, Alert, Row, Col, Card, Spinner } from 'react-bootstrap';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
+import { queryClient } from '../../queryClient';
 
 function AdminOfficers() {
   const [officers, setOfficers] = useState([]);
@@ -84,6 +85,8 @@ function AdminOfficers() {
       setShowModal(false);
       resetForm();
       fetchOfficers();
+      queryClient.invalidateQueries('admin');
+      queryClient.invalidateQueries('wards');
     } catch (error) {
       const errorMsg = error.response?.data?.error || 'Failed to add officer';
       toast.error(errorMsg);
@@ -96,6 +99,8 @@ function AdminOfficers() {
         await apiClient.delete(`/officers/${officerId}`);
         toast.success('Officer deleted successfully!');
         fetchOfficers();
+        queryClient.invalidateQueries('admin');
+        queryClient.invalidateQueries('wards');
       } catch (error) {
         toast.error('Failed to delete officer');
       }
