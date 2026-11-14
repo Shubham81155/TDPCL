@@ -30,7 +30,9 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Don't try to refresh tokens for failed login/register calls
+    const isAuthCall = /\/auth\/(login|register|refresh)/.test(originalRequest?.url || '');
+    if (error.response?.status === 401 && !originalRequest._retry && !isAuthCall) {
       originalRequest._retry = true;
 
       try {

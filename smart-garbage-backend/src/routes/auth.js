@@ -7,8 +7,24 @@ const authService = require('../services/authService');
 const { verifyToken } = require('../middleware/auth');
 const { validateRequest, schemas } = require('../middleware/validator');
 
+// Minimal in-memory brute-force protection: 10 attempts / 15 min per IP+path
+// (a successful login clears the counter, so only failures accumulate)
+const attempts = new Map();
+const rateLimit = (req, res, next) => {
+  const key = `${req.ip}:${req.path}`;
+  const now = Date.now();
+  const entry = attempts.get(key) || { count: 0, reset: now + 15 * 60 * 1000 };
+  if (now > entry.reset) { entry.count = 0; entry.reset = now + 15 * 60 * 1000; }
+  entry.count += 1;
+  attempts.set(key, entry);
+  if (entry.count > 10) {
+    return res.status(429).json({ success: false, error: 'Too many attempts. Try again later.' });
+  }
+  next();
+};
+
 // Register new citizen
-router.post('/register', validateRequest(schemas.registerUser), async (req, res) => {
+router.post('/register', rateLimit, validateRequest(schemas.registerUser), async (req, res) => {
   try {
     const user = await authService.registerUser(req.body);
     res.status(201).json({
@@ -25,10 +41,11 @@ router.post('/register', validateRequest(schemas.registerUser), async (req, res)
 });
 
 // Login user
-router.post('/login', validateRequest(schemas.loginUser), async (req, res) => {
+router.post('/login', rateLimit, validateRequest(schemas.loginUser), async (req, res) => {
   try {
     const { email, password } = req.body;
     const result = await authService.loginUser(email, password);
+    attempts.delete(`${req.ip}:${req.path}`); // only failed attempts count toward the limit
     res.json({
       success: true,
       message: 'Login successful',
@@ -39,6 +56,20 @@ router.post('/login', validateRequest(schemas.loginUser), async (req, res) => {
       success: false,
       error: error.message,
     });
+  }
+});
+
+// Refresh access token
+router.post('/refresh', async (req, res) => {
+  try {
+    const { refreshToken } = req.body;
+    if (!refreshToken) {
+      return res.status(400).json({ success: false, error: 'refreshToken is required' });
+    }
+    const tokens = await authService.refreshTokens(refreshToken);
+    res.json({ success: true, ...tokens });
+  } catch (error) {
+    res.status(401).json({ success: false, error: error.message });
   }
 });
 
@@ -80,6 +111,10 @@ router.post('/change-password', verifyToken, async (req, res) => {
   try {
     const { oldPassword, newPassword } = req.body;
 
+    if (typeof newPassword === 'string' && newPassword.length < 6) {
+      return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+    }
+
     if (!oldPassword || !newPassword) {
       return res.status(400).json({
         success: false,
@@ -102,6 +137,35 @@ router.post('/change-password', verifyToken, async (req, res) => {
       success: false,
       error: error.message,
     });
+  }
+});
+
+// Request password reset (always 200 to avoid user enumeration)
+router.post('/forgot-password', rateLimit, async (req, res) => {
+  const { email } = req.body || {};
+  if (typeof email === 'string' && email.trim()) {
+    await authService.requestPasswordReset(email.trim());
+  }
+  res.json({
+    success: true,
+    message: 'If an account with that email exists, a password reset link has been sent.',
+  });
+});
+
+// Reset password using emailed token
+router.post('/reset-password', rateLimit, async (req, res) => {
+  const { token, newPassword } = req.body || {};
+  if (typeof token !== 'string' || !token || typeof newPassword !== 'string') {
+    return res.status(400).json({ success: false, error: 'Token and new password are required' });
+  }
+  if (newPassword.length < 6) {
+    return res.status(400).json({ success: false, error: 'New password must be at least 6 characters' });
+  }
+  try {
+    const result = await authService.resetPassword(token, newPassword);
+    res.json({ success: true, ...result });
+  } catch (error) {
+    res.status(400).json({ success: false, error: error.message });
   }
 });
 

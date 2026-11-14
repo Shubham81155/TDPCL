@@ -1,6 +1,11 @@
 const nodemailer = require('nodemailer');
 const { db } = require('../config/database');
 
+
+// Escape user-controlled text before putting it in HTML email bodies
+const escapeHtml = (value) =>
+  String(value ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 let transporter;
 
 const initializeEmailService = () => {
@@ -40,7 +45,7 @@ const sendComplaintSubmittedEmail = async (citizenEmail, citizenName, complaintI
       subject: `Complaint #${complaintId} Submitted Successfully`,
       html: `
         <h2>Complaint Submitted</h2>
-        <p>Dear ${citizenName},</p>
+        <p>Dear ${escapeHtml(citizenName)},</p>
         <p>Your garbage complaint has been received and registered.</p>
         <p><strong>Complaint ID:</strong> #${complaintId}</p>
         <p>You will receive updates via email and SMS as your complaint is processed.</p>
@@ -87,10 +92,10 @@ const sendComplaintAssignedEmail = async (officerEmail, officerName, complaintId
       subject: `New Complaint Assigned: #${complaintId}`,
       html: `
         <h2>New Complaint Assignment</h2>
-        <p>Dear ${officerName},</p>
+        <p>Dear ${escapeHtml(officerName)},</p>
         <p>A new garbage complaint has been assigned to you.</p>
         <p><strong>Complaint ID:</strong> #${complaintId}</p>
-        <p><strong>Title:</strong> ${complaintTitle}</p>
+        <p><strong>Title:</strong> ${escapeHtml(complaintTitle)}</p>
         <p><a href="${process.env.FRONTEND_URL}/officer/complaints">View Assigned Complaints</a></p>
         <p>Please prioritize and process this complaint as soon as possible.</p>
       `,
@@ -118,7 +123,7 @@ const sendComplaintStatusUpdateEmail = async (citizenEmail, citizenName, complai
       subject: `Complaint #${complaintId} Status Updated: ${statusText}`,
       html: `
         <h2>Complaint Status Update</h2>
-        <p>Dear ${citizenName},</p>
+        <p>Dear ${escapeHtml(citizenName)},</p>
         <p>Your complaint status has been updated.</p>
         <p><strong>Complaint ID:</strong> #${complaintId}</p>
         <p><strong>New Status:</strong> ${statusText}</p>
@@ -159,12 +164,12 @@ const sendComplaintSubmittedToAdminEmail = async (complaintId, citizenName, loca
         subject: `New Complaint Submitted: #${complaintId}`,
         html: `
           <h2>New Complaint Report</h2>
-          <p>Dear ${admin.name},</p>
+          <p>Dear ${escapeHtml(admin.name)},</p>
           <p>A new garbage complaint has been submitted by a citizen.</p>
           <p><strong>Complaint ID:</strong> #${complaintId}</p>
-          <p><strong>Reported By:</strong> ${citizenName}</p>
-          <p><strong>Location:</strong> ${location}</p>
-          <p><strong>Category:</strong> ${category}</p>
+          <p><strong>Reported By:</strong> ${escapeHtml(citizenName)}</p>
+          <p><strong>Location:</strong> ${escapeHtml(location)}</p>
+          <p><strong>Category:</strong> ${escapeHtml(category)}</p>
           <p><a href="${process.env.FRONTEND_URL}/admin/complaints">View All Complaints</a></p>
           <p>Please review and manage this complaint through the admin dashboard.</p>
         `,
@@ -178,7 +183,34 @@ const sendComplaintSubmittedToAdminEmail = async (complaintId, citizenName, loca
   }
 };
 
+const sendPasswordResetEmail = async (email, name, resetUrl) => {
+  try {
+    if (!transporter) {
+      initializeEmailService();
+    }
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: email,
+      subject: 'Reset your password',
+      html: `
+        <h2>Password Reset</h2>
+        <p>Dear ${escapeHtml(name || 'user')},</p>
+        <p>We received a request to reset your password. Click the link below to choose a new one. This link expires in 1 hour.</p>
+        <p><a href="${resetUrl}">Reset Password</a></p>
+        <p>If you did not request this, you can safely ignore this email.</p>
+      `,
+    });
+    console.log(`Password reset email sent to ${email}`);
+    return true;
+  } catch (error) {
+    console.error(`Failed to send password reset email to ${email}:`, error.message);
+    return false;
+  }
+};
+
 module.exports = {
+  sendPasswordResetEmail,
   initializeEmailService,
   sendComplaintSubmittedEmail,
   sendComplaintAssignedEmail,

@@ -35,10 +35,10 @@ function LoginPage() {
     setIsLoading(true);
     try {
       const response = await apiClient.post('/auth/login', { email, password });
-      const { user_id, email: userEmail, role, accessToken, refreshToken } = response.data;
+      const { user_id, name, email: userEmail, role, accessToken, refreshToken } = response.data;
 
       login(
-        { user_id, email: userEmail, role },
+        { user_id, name, email: userEmail, role },
         accessToken,
         refreshToken
       );

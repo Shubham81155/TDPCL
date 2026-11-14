@@ -32,7 +32,8 @@ const schemas = {
   registerUser: Joi.object({
     email: Joi.string().email().required(),
     password: Joi.string().min(6).required(),
-    role: Joi.string().valid('citizen', 'officer', 'admin').default('citizen'),
+    name: Joi.string().trim().max(255),
+    phone: Joi.string().trim().max(20),
   }),
 
   loginUser: Joi.object({

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { Container, Form, Button, Card, Alert } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import toast from 'react-hot-toast';
+import apiClient from '../../services/api';
 import './Auth.css';
 
 function ForgotPasswordPage() {
@@ -22,12 +23,14 @@ function ForgotPasswordPage() {
 
     setIsLoading(true);
     try {
-      // TODO: Integrate with backend password reset endpoint
-      toast.success('Password reset link sent to your email!');
+      await apiClient.post('/auth/forgot-password', { email: email.trim() });
       setSubmitted(true);
     } catch (err) {
-      setError('Failed to process request. Please try again.');
-      toast.error('Failed to process request');
+      const msg = err.response?.status === 429
+        ? 'Too many attempts. Please try again later.'
+        : 'Failed to process request. Please try again.';
+      setError(msg);
+      toast.error(msg);
     } finally {
       setIsLoading(false);
     }
@@ -69,7 +72,7 @@ function ForgotPasswordPage() {
           ) : (
             <Alert variant="success" className="text-center">
               <h5 className="mb-3">Check Your Email!</h5>
-              <p>We've sent password reset instructions to your email. Please check your inbox.</p>
+              <p>If an account exists for that email, we've sent password reset instructions. Please check your inbox (the link expires in 1 hour).</p>
             </Alert>
           )}
 

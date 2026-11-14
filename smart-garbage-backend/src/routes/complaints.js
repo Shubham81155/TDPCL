@@ -60,22 +60,64 @@ router.post(
         });
       }
 
+      const latNum = Number(String(latitude).trim());
+      const lngNum = Number(String(longitude).trim());
+      if (!Number.isFinite(latNum) || latNum < -90 || latNum > 90) {
+        return res.status(400).json({
+          success: false,
+          error: 'Latitude must be a number between -90 and 90',
+        });
+      }
+      if (!Number.isFinite(lngNum) || lngNum < -180 || lngNum > 180) {
+        return res.status(400).json({
+          success: false,
+          error: 'Longitude must be a number between -180 and 180',
+        });
+      }
+
+      const rawTitle = typeof req.body.title === 'string' ? req.body.title.trim() : '';
+      const rawDescription = typeof req.body.description === 'string' ? req.body.description.trim() : '';
+      const rawUrgency = typeof req.body.urgency_level === 'string' ? req.body.urgency_level.trim().toLowerCase() : '';
+
+      if (rawTitle.length > 120) {
+        return res.status(400).json({
+          success: false,
+          error: 'Title must be 120 characters or fewer',
+        });
+      }
+      if (rawDescription.length > 1000) {
+        return res.status(400).json({
+          success: false,
+          error: 'Description must be 1000 characters or fewer',
+        });
+      }
+      const urgencyLevel = rawUrgency || 'medium';
+      if (!['low', 'medium', 'high'].includes(urgencyLevel)) {
+        return res.status(400).json({
+          success: false,
+          error: 'Urgency level must be one of: low, medium, high',
+        });
+      }
+
+      const complaintTitle = rawTitle || 'Garbage Issue Report';
+
       // Upload image to S3
       const s3Result = await uploadToS3(req.file.buffer, req.file.originalname, 'complaints');
 
       // Get ward by coordinates
-      const ward = await wardService.getWardByCoordinates(latitude, longitude);
+      const ward = await wardService.getWardByCoordinates(latNum, lngNum);
 
       const complaintData = {
         user_id: req.user.user_id,
-        title: 'Garbage Issue Report',
-        description: 'Garbage issue reported via mobile app',
+        title: complaintTitle,
+        description: rawDescription || 'No description provided',
         image_path: s3Result.url,
-        latitude: parseFloat(latitude),
-        longitude: parseFloat(longitude),
+        latitude: latNum,
+        longitude: lngNum,
         area: ward ? ward.name : 'Unknown Area',
+        ward_id: ward ? ward.ward_id : null,
         category,
-        urgency_level: 'medium',
+        urgency_level: urgencyLevel,
       };
 
       const complaint = await complaintService.createComplaint(complaintData);
@@ -105,7 +147,7 @@ router.post(
           [assignment.officer_id]
         );
         if (officer && officer.email) {
-          sendComplaintAssignedEmail(officer.email, officer.name, complaint.complaint_id, 'Garbage Issue Report').catch(err => {
+          sendComplaintAssignedEmail(officer.email, officer.name, complaint.complaint_id, complaintTitle).catch(err => {
             console.error('Email error (non-blocking):', err.message);
           });
         }
@@ -311,6 +353,19 @@ router.patch(
         });
       }
 
+      const officerRow = await db.oneOrNone(
+        `SELECT o.officer_id FROM officers o
+         JOIN complaints c ON c.assigned_officer_id = o.officer_id
+         WHERE o.user_id = $1 AND c.complaint_id = $2`,
+        [req.user.user_id, id]
+      );
+      if (!officerRow) {
+        return res.status(403).json({
+          success: false,
+          error: 'This complaint is not assigned to you',
+        });
+      }
+
       const updated = await complaintService.updateComplaintStatus(
         id,
         status,
@@ -376,11 +431,16 @@ router.post(
         [req.user.user_id]
       );
 
+      if (!officer) {
+        return res.status(400).json({ success: false, error: 'Officer profile not found' });
+      }
+
       const resolved = await complaintService.resolveComplaint(
         id,
         resolution_image_path,
         comments,
-        officer.officer_id
+        officer.officer_id,
+        req.user.user_id
       );
 
       res.json({

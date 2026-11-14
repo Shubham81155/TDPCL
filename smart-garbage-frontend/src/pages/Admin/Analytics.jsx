@@ -1,20 +1,67 @@
 // src/pages/Admin/Analytics.jsx
-import React, { useState, useEffect } from 'react';
-import { Container, Row, Col, Card, Spinner } from 'react-bootstrap';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { Container, Row, Col, Card, Spinner, Button, Alert } from 'react-bootstrap';
+import {
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  BarElement,
+  Tooltip,
+  Legend,
+} from 'chart.js';
+import { Bar } from 'react-chartjs-2';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
+import { formatComplaintCategory } from '../../utils/classificationUtils';
+
+ChartJS.register(CategoryScale, LinearScale, BarElement, Tooltip, Legend);
+
+const GREEN = '#28a745';
+const DARK_GREEN = '#1e7e34';
+
+const num = (v) => {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+};
+const pct = (part, whole) => (whole ? Math.round((part / whole) * 100) : 0);
+
+const barOptions = {
+  responsive: true,
+  maintainAspectRatio: false,
+  plugins: { legend: { position: 'bottom' } },
+  scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+};
+
+function ChartCard({ title, headerColor, empty, label, children }) {
+  return (
+    <Card className="border-0 shadow-sm h-100">
+      <Card.Header className="text-white" style={{ background: headerColor }}>
+        <Card.Title className="mb-0 h5">{title}</Card.Title>
+      </Card.Header>
+      <Card.Body>
+        {empty ? (
+          <p className="text-muted text-center my-5">No data available yet.</p>
+        ) : (
+          <>
+            <div style={{ position: 'relative', height: 300 }}>{children}</div>
+            <p className="visually-hidden">{label}</p>
+          </>
+        )}
+      </Card.Body>
+    </Card>
+  );
+}
 
 function AdminAnalytics() {
   const [categoryStats, setCategoryStats] = useState([]);
   const [wardStats, setWardStats] = useState([]);
   const [officers, setOfficers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  useEffect(() => {
-    loadAnalytics();
-  }, []);
-
-  const loadAnalytics = async () => {
+  const loadAnalytics = useCallback(async () => {
+    setIsLoading(true);
+    setError(null);
     try {
       const [categoryRes, wardRes, officersRes] = await Promise.all([
         apiClient.get('/admin/stats/by-category'),
@@ -22,114 +69,219 @@ function AdminAnalytics() {
         apiClient.get('/admin/stats/officer-performance?limit=10'),
       ]);
 
-      setCategoryStats(categoryRes.data.data || []);
-      setWardStats(wardRes.data.data || []);
-      setOfficers(officersRes.data.data || []);
-    } catch (error) {
+      setCategoryStats(
+        (categoryRes.data.data || []).map((c) => ({
+          label: formatComplaintCategory(c.category),
+          count: num(c.count),
+          resolved: num(c.resolved),
+        }))
+      );
+      setWardStats(
+        (wardRes.data.data || []).map((w) => ({
+          id: w.ward_id,
+          name: w.name,
+          total: num(w.total_complaints),
+          resolved: num(w.resolved),
+          officers: num(w.officer_count),
+        }))
+      );
+      setOfficers(
+        (officersRes.data.data || []).map((o) => ({
+          id: o.officer_id,
+          name: o.officer_name || 'Unknown',
+          total: num(o.total_complaints),
+          resolved: num(o.resolved),
+          active: num(o.active),
+          avgHours: o.avg_resolution_hours == null ? null : num(o.avg_resolution_hours),
+          rate: num(o.resolution_rate),
+        }))
+      );
+    } catch (err) {
+      setError(err?.response?.data?.error || 'Failed to load analytics');
       toast.error('Failed to load analytics');
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  if (isLoading) {
-    return (
-      <Container className="py-5 text-center">
-        <Spinner animation="border" variant="success" />
-      </Container>
-    );
-  }
+  useEffect(() => {
+    loadAnalytics();
+  }, [loadAnalytics]);
+
+  const categoryChart = useMemo(
+    () => ({
+      labels: categoryStats.map((c) => c.label),
+      datasets: [
+        { label: 'Total', data: categoryStats.map((c) => c.count), backgroundColor: GREEN },
+        { label: 'Resolved', data: categoryStats.map((c) => c.resolved), backgroundColor: DARK_GREEN },
+      ],
+    }),
+    [categoryStats]
+  );
+
+  const wardChart = useMemo(
+    () => ({
+      labels: wardStats.map((w) => w.name),
+      datasets: [
+        { label: 'Total', data: wardStats.map((w) => w.total), backgroundColor: GREEN },
+        { label: 'Resolved', data: wardStats.map((w) => w.resolved), backgroundColor: DARK_GREEN },
+      ],
+    }),
+    [wardStats]
+  );
+
+  const categoryLabel = `Bar chart of complaints by category: ${categoryStats
+    .map((c) => `${c.label} ${c.count} total, ${c.resolved} resolved`)
+    .join('; ')}.`;
+  const wardLabel = `Bar chart of complaints by ward: ${wardStats
+    .map((w) => `${w.name} ${w.total} total, ${w.resolved} resolved`)
+    .join('; ')}.`;
 
   return (
     <Container className="py-4">
       <h2 className="fw-bold mb-4">
-        <i className="fas fa-chart-bar me-2 text-success"></i>
-        Analytics & Reports
+        <i className="fas fa-chart-bar me-2" style={{ color: GREEN }} aria-hidden="true"></i>
+        Analytics
       </h2>
 
-      <Row className="mb-4">
-        <Col lg={6}>
-          <Card className="border-0 shadow-lg">
-            <Card.Header className="bg-success text-white">
-              <Card.Title className="mb-0">Complaints by Category</Card.Title>
-            </Card.Header>
-            <Card.Body>
-              {categoryStats.map((cat, idx) => (
-                <div key={idx} className="mb-3">
-                  <div className="d-flex justify-content-between mb-1">
-                    <span>{cat.category}</span>
-                    <span className="fw-bold">{cat.count}</span>
-                  </div>
-                  <div className="progress">
-                    <div className="progress-bar bg-success" style={{ width: `${(cat.resolved / cat.count) * 100}%` }}>
-                      {Math.round((cat.resolved / cat.count) * 100)}%
+      {isLoading ? (
+        <div className="text-center py-5" role="status" aria-live="polite">
+          <Spinner animation="border" variant="success" />
+          <span className="visually-hidden">Loading analytics</span>
+        </div>
+      ) : error ? (
+        <Alert variant="danger" className="d-flex flex-wrap align-items-center justify-content-between gap-2">
+          <span>
+            <i className="fas fa-exclamation-triangle me-2" aria-hidden="true"></i>
+            {error}
+          </span>
+          <Button variant="outline-danger" size="sm" onClick={loadAnalytics}>
+            <i className="fas fa-redo me-1" aria-hidden="true"></i>Retry
+          </Button>
+        </Alert>
+      ) : (
+        <>
+          <Row className="g-3 mb-4">
+            <Col lg={6}>
+              <ChartCard
+                title="Complaints by Category"
+                headerColor={GREEN}
+                empty={categoryStats.length === 0}
+                label={categoryLabel}
+              >
+                <Bar data={categoryChart} options={barOptions} role="img" aria-label={categoryLabel}>
+                  {categoryLabel}
+                </Bar>
+              </ChartCard>
+            </Col>
+            <Col lg={6}>
+              <ChartCard
+                title="Complaints by Ward"
+                headerColor={DARK_GREEN}
+                empty={wardStats.length === 0}
+                label={wardLabel}
+              >
+                <Bar data={wardChart} options={barOptions} role="img" aria-label={wardLabel}>
+                  {wardLabel}
+                </Bar>
+              </ChartCard>
+            </Col>
+          </Row>
+
+          <Row className="g-3">
+            <Col>
+              <Card className="border-0 shadow-sm">
+                <Card.Header className="text-white" style={{ background: GREEN }}>
+                  <Card.Title className="mb-0 h5">Officer Performance (Top 10)</Card.Title>
+                </Card.Header>
+                <Card.Body>
+                  {officers.length === 0 ? (
+                    <p className="text-muted text-center my-4">No officer data available yet.</p>
+                  ) : (
+                    <div className="table-responsive">
+                      <table className="table table-sm table-hover align-middle mb-0">
+                        <caption className="visually-hidden">
+                          Top officers ranked by resolved complaints
+                        </caption>
+                        <thead>
+                          <tr>
+                            <th scope="col">#</th>
+                            <th scope="col">Officer</th>
+                            <th scope="col" className="text-end">Total</th>
+                            <th scope="col" className="text-end">Resolved</th>
+                            <th scope="col" className="text-end">Active</th>
+                            <th scope="col" className="text-end">Avg Hours</th>
+                            <th scope="col" className="text-end">Resolution Rate</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {officers.map((o, idx) => (
+                            <tr key={o.id ?? idx}>
+                              <td>{idx + 1}</td>
+                              <td className="fw-bold">{o.name}</td>
+                              <td className="text-end">{o.total}</td>
+                              <td className="text-end">{o.resolved}</td>
+                              <td className="text-end">{o.active}</td>
+                              <td className="text-end">{o.avgHours == null ? '-' : o.avgHours.toFixed(1)}</td>
+                              <td className="text-end">
+                                <span className="badge" style={{ background: GREEN }}>
+                                  {o.rate.toFixed(1)}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
                     </div>
-                  </div>
-                </div>
-              ))}
-            </Card.Body>
-          </Card>
-        </Col>
+                  )}
+                </Card.Body>
+              </Card>
+            </Col>
+          </Row>
 
-        <Col lg={6}>
-          <Card className="border-0 shadow-lg">
-            <Card.Header className="bg-info text-white">
-              <Card.Title className="mb-0">Top Officers</Card.Title>
-            </Card.Header>
-            <Card.Body>
-              {officers.slice(0, 5).map((officer, idx) => (
-                <div key={idx} className="mb-3 pb-3 border-bottom">
-                  <div className="d-flex justify-content-between mb-1">
-                    <span className="fw-bold">{idx + 1}. {officer.officer_name}</span>
-                    <span className="badge bg-success">{officer.resolution_rate}%</span>
-                  </div>
-                  <small className="text-muted">{officer.resolved} / {officer.total_complaints} resolved</small>
-                </div>
-              ))}
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
-
-      <Row>
-        <Col>
-          <Card className="border-0 shadow-lg">
-            <Card.Header className="bg-primary text-white">
-              <Card.Title className="mb-0">Complaints by Ward</Card.Title>
-            </Card.Header>
-            <Card.Body>
-              <div className="table-responsive">
-                <table className="table table-sm mb-0">
-                  <thead>
-                    <tr>
-                      <th>Ward</th>
-                      <th>Total</th>
-                      <th>Resolved</th>
-                      <th>Officers</th>
-                      <th>Rate</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {wardStats.map((ward, idx) => (
-                      <tr key={idx}>
-                        <td className="fw-bold">{ward.name}</td>
-                        <td>{ward.total_complaints}</td>
-                        <td>{ward.resolved}</td>
-                        <td>{ward.officer_count}</td>
-                        <td>
-                          <span className="badge bg-success">
-                            {Math.round((ward.resolved / ward.total_complaints) * 100)}%
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card.Body>
-          </Card>
-        </Col>
-      </Row>
+          {wardStats.length > 0 && (
+            <Row className="g-3 mt-1">
+              <Col>
+                <Card className="border-0 shadow-sm">
+                  <Card.Header className="text-white" style={{ background: DARK_GREEN }}>
+                    <Card.Title className="mb-0 h5">Ward Details</Card.Title>
+                  </Card.Header>
+                  <Card.Body>
+                    <div className="table-responsive">
+                      <table className="table table-sm align-middle mb-0">
+                        <thead>
+                          <tr>
+                            <th scope="col">Ward</th>
+                            <th scope="col" className="text-end">Total</th>
+                            <th scope="col" className="text-end">Resolved</th>
+                            <th scope="col" className="text-end">Officers</th>
+                            <th scope="col" className="text-end">Rate</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {wardStats.map((w, idx) => (
+                            <tr key={w.id ?? idx}>
+                              <td className="fw-bold">{w.name}</td>
+                              <td className="text-end">{w.total}</td>
+                              <td className="text-end">{w.resolved}</td>
+                              <td className="text-end">{w.officers}</td>
+                              <td className="text-end">
+                                <span className="badge" style={{ background: GREEN }}>
+                                  {pct(w.resolved, w.total)}%
+                                </span>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </Card.Body>
+                </Card>
+              </Col>
+            </Row>
+          )}
+        </>
+      )}
     </Container>
   );
 }

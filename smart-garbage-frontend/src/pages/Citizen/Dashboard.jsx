@@ -12,6 +12,7 @@ function CitizenDashboard() {
     in_progress_count: 0,
     resolved_count: 0,
   });
+  const [recent, setRecent] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useAuth();
 
@@ -31,6 +32,7 @@ function CitizenDashboard() {
       };
 
       setStats(stats);
+      setRecent(complaints.slice(0, 5));
     } catch (error) {
       toast.error('Failed to load statistics');
     } finally {
@@ -139,9 +141,34 @@ function CitizenDashboard() {
               <Card.Title className="mb-0">Recent Activity</Card.Title>
             </Card.Header>
             <Card.Body>
-              <p className="text-muted mb-0">
-                <Link to="/citizen/complaints">View all your complaints</Link>
-              </p>
+              {isLoading ? (
+                <p className="text-muted mb-0">Loading...</p>
+              ) : recent.length === 0 ? (
+                <p className="text-muted mb-0">
+                  No complaints yet. <Link to="/citizen/complaint/new">Report your first issue</Link>.
+                </p>
+              ) : (
+                <div className="list-group list-group-flush">
+                  {recent.map((c) => (
+                    <Link
+                      key={c.complaint_id}
+                      to={`/citizen/complaint/${c.complaint_id}`}
+                      className="list-group-item list-group-item-action d-flex justify-content-between align-items-center px-0"
+                    >
+                      <span>
+                        <strong>#{c.complaint_id}</strong>{' '}
+                        <span className="text-muted">
+                          {(c.category || 'garbage').replace(/_/g, ' ')} · {c.area || 'Unknown area'}
+                        </span>
+                      </span>
+                      <span className={`badge status-${c.status}`}>{(c.status || '').replace(/_/g, ' ')}</span>
+                    </Link>
+                  ))}
+                  <Link to="/citizen/complaints" className="small pt-2">
+                    View all complaints →
+                  </Link>
+                </div>
+              )}
             </Card.Body>
           </Card>
         </Col>

@@ -1,14 +1,10 @@
 // src/setupTests.js
 import '@testing-library/jest-dom';
 
-// Mock localStorage
-const localStorageMock = {
-  getItem: jest.fn(),
-  setItem: jest.fn(),
-  removeItem: jest.fn(),
-  clear: jest.fn(),
-};
-global.localStorage = localStorageMock;
+// jsdom provides a working localStorage; just reset it between tests
+afterEach(() => {
+  window.localStorage.clear();
+});
 
 // Mock window.matchMedia
 Object.defineProperty(window, 'matchMedia', {

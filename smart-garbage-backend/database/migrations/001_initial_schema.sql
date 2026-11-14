@@ -1,6 +1,6 @@
-# Database Initial Schema Migration
-# PostgreSQL with PostGIS Extension
-# Run: psql -U postgres -d smart_garbage_db -f migrations/001_initial_schema.sql
+-- Database Initial Schema Migration
+-- PostgreSQL with PostGIS Extension
+-- Run: psql -U postgres -d smart_garbage_db -f migrations/001_initial_schema.sql
 
 -- Enable PostGIS Extension
 CREATE EXTENSION IF NOT EXISTS postgis;
