@@ -1,6 +1,6 @@
 // src/pages/Citizen/Dashboard.jsx
 import React, { useMemo } from 'react';
-import { Container, Row, Col, Card, Button, Alert } from 'react-bootstrap';
+import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMyComplaints } from '../../hooks/useComplaints';
 import StatusBadge from '../../components/common/StatusBadge';

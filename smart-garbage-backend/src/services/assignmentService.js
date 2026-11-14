@@ -132,6 +132,10 @@ const manualAssign = async (complaintId, officerId, assignedBy) => {
       [complaintId]
     );
 
+    if (!complaint) {
+      throw AppError.notFound('Complaint not found');
+    }
+
     // Update assignment
     const updated = await db.one(
       `UPDATE complaints 

@@ -1,6 +1,6 @@
 // src/pages/Auth/RegisterPage.jsx
 import React, { useState } from 'react';
-import { Container, Form, Button, Card, Alert, Row, Col } from 'react-bootstrap';
+import { Container, Form, Button, Card, Alert } from 'react-bootstrap';
 import { Link, useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
 import toast from 'react-hot-toast';
@@ -43,7 +43,7 @@ function RegisterPage() {
 
     setIsLoading(true);
     try {
-      const response = await apiClient.post('/auth/register', {
+      await apiClient.post('/auth/register', {
         email: formData.email,
         password: formData.password,
       });

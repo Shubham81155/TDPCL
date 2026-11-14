@@ -16,6 +16,8 @@ function ComplaintDetails() {
   useEffect(() => {
     loadComplaintDetails();
     loadTimeline();
+    // Reload only when the complaint id changes; the loaders are re-created every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const loadComplaintDetails = async () => {
