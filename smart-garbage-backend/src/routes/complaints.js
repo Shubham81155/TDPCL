@@ -49,6 +49,12 @@ router.get('/', verifyToken, checkRole('citizen'), async (req, res) => {
   });
 });
 
+// Status summary for the citizen dashboard (registered before the numeric-id routes)
+router.get('/summary', verifyToken, checkRole('citizen'), async (req, res) => {
+  const summary = await complaintService.getComplaintSummaryByUser(req.user.user_id);
+  res.json({ success: true, summary });
+});
+
 // Get officer's assigned complaints
 router.get('/officer/assigned', verifyToken, checkRole('officer'), async (req, res) => {
   const { status } = req.query;

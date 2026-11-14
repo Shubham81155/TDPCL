@@ -65,6 +65,13 @@ describe('id/date helpers', () => {
     expect(parseOptionalDate('')).toBeNull();
     expect(parseOptionalDate('2024-01-02')).toBeInstanceOf(Date);
     expect(() => parseOptionalDate('nope', 'dateFrom')).toThrow('Invalid dateFrom');
+    // impossible calendar dates must not roll over silently
+    expect(() => parseOptionalDate('2025-02-30', 'dateFrom')).toThrow('Invalid dateFrom');
+    expect(() => parseOptionalDate('2025-13-01', 'dateTo')).toThrow('Invalid dateTo');
+    expect(() => parseOptionalDate('2023-02-29', 'dateTo')).toThrow('Invalid dateTo');
+    expect(parseOptionalDate('2024-02-29')).toBeInstanceOf(Date); // real leap day
+    // full timestamps are still accepted
+    expect(parseOptionalDate('2024-01-02T10:00:00Z')).toBeInstanceOf(Date);
   });
 });
 
@@ -111,5 +118,17 @@ describe('AppError through a router', () => {
     const res = await request(build()).get('/boom');
     expect(res.status).toBe(500);
     expect(res.body.error).toBe('Internal Server Error');
+  });
+});
+
+describe('parseDateRange', () => {
+  const { parseDateRange } = require('../../src/utils/pagination');
+  test('empty -> nulls; valid -> Dates; invalid / reversed -> 400', () => {
+    expect(parseDateRange({})).toEqual({ dateFrom: null, dateTo: null });
+    expect(parseDateRange()).toEqual({ dateFrom: null, dateTo: null });
+    expect(parseDateRange({ dateFrom: '2024-01-01', dateTo: '2024-01-01' }).dateTo).toBeInstanceOf(Date);
+    expect(() => parseDateRange({ dateFrom: 'x' })).toThrow('Invalid dateFrom');
+    expect(() => parseDateRange({ dateTo: 'x' })).toThrow('Invalid dateTo');
+    expect(() => parseDateRange({ dateFrom: '2024-02-01', dateTo: '2024-01-01' })).toThrow(/must not be after/);
   });
 });

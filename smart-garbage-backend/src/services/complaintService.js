@@ -134,6 +134,33 @@ const countComplaintsByUser = async (userId, filters = {}) => {
   }
 };
 
+// Counts of a citizen's complaints by status group, as numbers (one aggregate query)
+const getComplaintSummaryByUser = async (userId) => {
+  try {
+    const row = await db.one(
+      `SELECT
+        COUNT(*)::int AS total,
+        (COUNT(*) FILTER (WHERE status IN ('new', 'pending', 'assigned')))::int AS pending,
+        (COUNT(*) FILTER (WHERE status = 'in_progress'))::int AS in_progress,
+        (COUNT(*) FILTER (WHERE status = 'resolved'))::int AS resolved,
+        (COUNT(*) FILTER (WHERE status = 'rejected'))::int AS rejected
+       FROM complaints
+       WHERE user_id = $1`,
+      [userId]
+    );
+    const n = (v) => Number(v) || 0;
+    return {
+      total: n(row.total),
+      pending: n(row.pending),
+      in_progress: n(row.in_progress),
+      resolved: n(row.resolved),
+      rejected: n(row.rejected),
+    };
+  } catch (error) {
+    throw AppError.wrap(error, 'Failed to get complaint summary');
+  }
+};
+
 // Get complaints assigned to officer
 const getOfficerComplaints = async (officerId, filters = {}) => {
   const { status, limit = 20, offset = 0 } = filters;
@@ -384,6 +411,7 @@ module.exports = {
   getComplaintById,
   getComplaintsByUser,
   countComplaintsByUser,
+  getComplaintSummaryByUser,
   getOfficerComplaints,
   getAssignedComplaintsForUser,
   updateComplaintStatus,

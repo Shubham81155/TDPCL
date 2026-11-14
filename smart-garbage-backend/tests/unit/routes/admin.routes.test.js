@@ -23,7 +23,7 @@ beforeEach(() => jest.resetAllMocks());
 describe('auth on every admin endpoint', () => {
   const endpoints = [
     ['get', '/stats/complaints'], ['get', '/stats/by-category'], ['get', '/stats/by-ward'],
-    ['get', '/stats/officer-performance'], ['get', '/complaints'], ['post', '/heatmap'],
+    ['get', '/stats/officer-performance'], ['get', '/complaints'], ['post', '/heatmap'], ['get', '/heatmap'],
     ['get', '/audit-logs'], ['get', '/report/export'],
   ];
   test.each(endpoints)('%s %s -> 401 without token, 403 for citizen/officer', async (method, path) => {
@@ -54,11 +54,11 @@ describe('stats endpoints', () => {
   it('GET /stats/officer-performance parses limit', async () => {
     adminService.getOfficerPerformance.mockResolvedValue([]);
     await request(app).get('/api/admin/stats/officer-performance').set('Authorization', admin);
-    expect(adminService.getOfficerPerformance).toHaveBeenLastCalledWith(10);
+    expect(adminService.getOfficerPerformance).toHaveBeenLastCalledWith(10, { dateFrom: null, dateTo: null });
     await request(app).get('/api/admin/stats/officer-performance?limit=5000').set('Authorization', admin);
-    expect(adminService.getOfficerPerformance).toHaveBeenLastCalledWith(100);
+    expect(adminService.getOfficerPerformance).toHaveBeenLastCalledWith(100, { dateFrom: null, dateTo: null });
     await request(app).get('/api/admin/stats/officer-performance?limit=3').set('Authorization', admin);
-    expect(adminService.getOfficerPerformance).toHaveBeenLastCalledWith(3);
+    expect(adminService.getOfficerPerformance).toHaveBeenLastCalledWith(3, { dateFrom: null, dateTo: null });
   });
   it('500 for unexpected service error', async () => {
     adminService.getComplaintStats.mockRejectedValue(new Error('boom'));

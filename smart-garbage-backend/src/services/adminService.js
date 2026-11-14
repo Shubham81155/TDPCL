@@ -4,7 +4,32 @@
 const { db } = require('../config/database');
 const AppError = require('../utils/AppError');
 
-const getComplaintStats = async () => {
+// Whole-day bounds on complaints.created_at (timestamp without time zone).
+// dateFrom/dateTo are Dates parsed from YYYY-MM-DD; only their calendar day is
+// used: created_at >= day(dateFrom) AND created_at < day(dateTo) + 1 day, so
+// dateTo is inclusive through 23:59:59.999. `alias` prefixes the column.
+const dayString = (d) => (d instanceof Date ? d : new Date(d)).toISOString().slice(0, 10);
+
+const dateConditions = ({ dateFrom, dateTo } = {}, params, alias = '') => {
+  const col = `${alias}created_at`;
+  const conds = [];
+  if (dateFrom) {
+    params.push(dayString(dateFrom));
+    conds.push(`${col} >= $${params.length}::date`);
+  }
+  if (dateTo) {
+    params.push(dayString(dateTo));
+    conds.push(`${col} < ($${params.length}::date + 1)`);
+  }
+  return conds;
+};
+
+const whereOf = (conds) => (conds.length ? `WHERE ${conds.join(' AND ')}` : '');
+const andOf = (conds) => conds.map((c) => ` AND ${c}`).join('');
+
+const getComplaintStats = async (filters = {}) => {
+  const params = [];
+  const where = whereOf(dateConditions(filters, params));
   try {
     return await db.oneOrNone(
       `SELECT
@@ -19,23 +44,27 @@ const getComplaintStats = async () => {
         COUNT(*) FILTER (WHERE urgency_level = 'medium') as medium_urgency_count,
         COUNT(*) FILTER (WHERE urgency_level = 'low') as low_urgency_count,
         ROUND(AVG(EXTRACT(EPOCH FROM (COALESCE(resolved_at, NOW()) - created_at))/3600)::numeric, 2) as avg_resolution_hours
-       FROM complaints`
+       FROM complaints ${where}`,
+      params
     );
   } catch (error) {
     throw AppError.wrap(error, 'Failed to load complaint statistics');
   }
 };
 
-const getStatsByCategory = async () => {
+const getStatsByCategory = async (filters = {}) => {
+  const params = [];
+  const where = whereOf(dateConditions(filters, params));
   try {
     return await db.manyOrNone(
       `SELECT
         category,
         COUNT(*) as count,
         COUNT(*) FILTER (WHERE status = 'resolved') as resolved
-       FROM complaints
+       FROM complaints ${where}
        GROUP BY category
-       ORDER BY count DESC`
+       ORDER BY count DESC`,
+      params
     );
   } catch (error) {
     throw AppError.wrap(error, 'Failed to load category statistics');
@@ -44,23 +73,30 @@ const getStatsByCategory = async () => {
 
 // Counts are computed in separate sub-selects: joining complaints and officers
 // together multiplied every count by the number of officers in the ward.
-const getStatsByWard = async () => {
+const getStatsByWard = async (filters = {}) => {
+  const params = [];
+  const dateSql = andOf(dateConditions(filters, params, 'c.'));
   try {
     return await db.manyOrNone(
       `SELECT
         w.ward_id, w.name,
-        (SELECT COUNT(*) FROM complaints c WHERE c.ward_id = w.ward_id) as total_complaints,
-        (SELECT COUNT(*) FROM complaints c WHERE c.ward_id = w.ward_id AND c.status = 'resolved') as resolved,
+        (SELECT COUNT(*) FROM complaints c WHERE c.ward_id = w.ward_id${dateSql}) as total_complaints,
+        (SELECT COUNT(*) FROM complaints c WHERE c.ward_id = w.ward_id AND c.status = 'resolved'${dateSql}) as resolved,
         (SELECT COUNT(*) FROM officers o WHERE o.assigned_ward_id = w.ward_id AND o.status = 'active') as officer_count
        FROM wards w
-       ORDER BY total_complaints DESC`
+       ORDER BY total_complaints DESC`,
+      params
     );
   } catch (error) {
     throw AppError.wrap(error, 'Failed to load ward statistics');
   }
 };
 
-const getOfficerPerformance = async (limit = 10) => {
+const getOfficerPerformance = async (limit = 10, filters = {}) => {
+  const params = [limit];
+  // The date predicate lives in the LEFT JOIN ... ON so officers with no
+  // complaints in range are still listed (with zero counts).
+  const dateSql = andOf(dateConditions(filters, params, 'c.'));
   try {
     return await db.manyOrNone(
       `SELECT
@@ -73,19 +109,31 @@ const getOfficerPerformance = async (limit = 10) => {
         ROUND(((COUNT(c.complaint_id) FILTER (WHERE c.status = 'resolved')::float / NULLIF(COUNT(c.complaint_id), 0)) * 100)::numeric, 2) as resolution_rate
        FROM officers o
        LEFT JOIN users u ON o.user_id = u.user_id
-       LEFT JOIN complaints c ON o.officer_id = c.assigned_officer_id
+       LEFT JOIN complaints c ON o.officer_id = c.assigned_officer_id${dateSql}
        WHERE o.status = 'active'
        GROUP BY o.officer_id, u.name
        ORDER BY resolved DESC
        LIMIT $1`,
-      [limit]
+      params
     );
   } catch (error) {
     throw AppError.wrap(error, 'Failed to load officer performance');
   }
 };
 
-const getHeatmapData = async () => {
+const HEATMAP_LIMIT = 5000;
+
+const getHeatmapData = async ({ dateFrom, dateTo, status, category } = {}) => {
+  const params = [];
+  const conds = ['location IS NOT NULL', ...dateConditions({ dateFrom, dateTo }, params)];
+  if (status) {
+    params.push(status);
+    conds.push(`status = $${params.length}`);
+  }
+  if (category) {
+    params.push(category);
+    conds.push(`category = $${params.length}`);
+  }
   try {
     return await db.manyOrNone(
       `SELECT
@@ -94,9 +142,12 @@ const getHeatmapData = async () => {
         COUNT(*) as complaint_count,
         MAX(CASE WHEN urgency_level = 'high' THEN 1 ELSE 0 END) as has_urgent
        FROM complaints
-       WHERE location IS NOT NULL
+       WHERE ${conds.join(' AND ')}
        GROUP BY ST_X(location::geometry), ST_Y(location::geometry)
-       HAVING COUNT(*) > 0`
+       HAVING COUNT(*) > 0
+       ORDER BY complaint_count DESC
+       LIMIT ${HEATMAP_LIMIT}`,
+      params
     );
   } catch (error) {
     throw AppError.wrap(error, 'Failed to load heatmap data');

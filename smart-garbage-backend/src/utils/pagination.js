@@ -42,7 +42,24 @@ const parseOptionalDate = (value, label = 'date') => {
   if (value === undefined || value === null || value === '') return null;
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) throw new AppError(`Invalid ${label}`, 400);
+  // JavaScript silently rolls impossible calendar dates over (2025-02-30 -> 2025-03-02).
+  // For date-only input, require that the date reads back unchanged.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(String(value)) && d.toISOString().slice(0, 10) !== String(value)) {
+    throw new AppError(`Invalid ${label}`, 400);
+  }
   return d;
 };
 
-module.exports = { parsePagination, parseId, parseOptionalInt, parseOptionalDate };
+// Optional dateFrom/dateTo (YYYY-MM-DD) pair; invalid -> 400, from > to -> 400.
+// Returns Date objects (or null); services turn them into whole-day bounds.
+const parseDateRange = (query = {}) => {
+  const q = query || {};
+  const dateFrom = parseOptionalDate(q.dateFrom, 'dateFrom');
+  const dateTo = parseOptionalDate(q.dateTo, 'dateTo');
+  if (dateFrom && dateTo && dateFrom.getTime() > dateTo.getTime()) {
+    throw new AppError('dateFrom must not be after dateTo', 400);
+  }
+  return { dateFrom, dateTo };
+};
+
+module.exports = { parsePagination, parseId, parseOptionalInt, parseOptionalDate, parseDateRange };

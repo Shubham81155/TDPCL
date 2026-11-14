@@ -42,3 +42,13 @@ describe('complaint routes: numeric id patterns', () => {
     expect(matches(find('/officer/assigned', 'get'), '/officer/assigned')).toBe(true);
   });
 });
+
+describe('complaint routes: /summary', () => {
+  it('is registered before the numeric-id routes and not matched by them', () => {
+    const idx = (p) => routes.findIndex((r) => r.path === p);
+    expect(idx('/summary')).toBeGreaterThanOrEqual(0);
+    expect(idx('/summary')).toBeLessThan(idx('/:id(\\d+)'));
+    expect(matches(find('/:id(\\d+)', 'get'), '/summary')).toBe(false);
+    expect(matches(find('/summary', 'get'), '/summary')).toBe(true);
+  });
+});
