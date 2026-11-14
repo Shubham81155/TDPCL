@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Start Backend Dev Server",
+			"type": "shell",
+			"command": "npm",
+			"args": [
+				"--prefix",
+				"smart-garbage-backend",
+				"run",
+				"dev"
+			],
+			"isBackground": true
+		}
+	]
+}
