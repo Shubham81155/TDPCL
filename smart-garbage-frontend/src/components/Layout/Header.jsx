@@ -63,29 +63,28 @@ function Header() {
                   </>
                 )}
 
-                {/* Admin screens are English-only for now (see docs/I18N.md), so these stay literal. */}
                 {user?.role === 'admin' && (
                   <>
                     <Nav.Link as={NavLink} to="/admin/dashboard">
-                      Dashboard
+                      {t('nav.dashboard')}
                     </Nav.Link>
                     <Nav.Link as={NavLink} to="/admin/complaints">
-                      Complaints
+                      {t('nav.complaints')}
                     </Nav.Link>
                     <Nav.Link as={NavLink} to="/admin/officers">
-                      Officers
+                      {t('nav.officers')}
                     </Nav.Link>
                     <Nav.Link as={NavLink} to="/admin/wards">
-                      Wards
+                      {t('nav.wards')}
                     </Nav.Link>
                     <Nav.Link as={NavLink} to="/admin/map">
-                      Map
+                      {t('nav.map')}
                     </Nav.Link>
                     <Nav.Link as={NavLink} to="/admin/analytics">
-                      Analytics
+                      {t('nav.analytics')}
                     </Nav.Link>
                     <Nav.Link as={NavLink} to="/admin/reports">
-                      Reports
+                      {t('nav.reports')}
                     </Nav.Link>
                   </>
                 )}

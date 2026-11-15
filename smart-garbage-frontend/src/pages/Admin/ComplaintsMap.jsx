@@ -2,30 +2,31 @@
 // Complaint heatmap: one circleMarker per location (no Leaflet plugins).
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Container, Row, Col, Card, Form, ListGroup, Badge } from 'react-bootstrap';
-import useDateRange, { describeRange } from '../../hooks/useDateRange';
+import useDateRange from '../../hooks/useDateRange';
 import DateRangeFilter from '../../components/admin/DateRangeFilter';
 import { useHeatmap, radiusForCount, colorForIntensity } from '../../hooks/useHeatmap';
 import { loadLeaflet, TILE_URL, TILE_ATTRIBUTION } from '../../utils/leafletLoader';
 import { COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
+import { useTranslation } from '../../i18n/LanguageContext';
+import { statusLabel, categoryLabel } from '../../i18n/labels';
 import ErrorState from '../../components/common/ErrorState';
 import EmptyState from '../../components/common/EmptyState';
 
 const STATUSES = ['new', 'assigned', 'pending', 'in_progress', 'resolved', 'rejected'];
-const statusLabel = (s) => s.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-const tooltipText = (p) => `${p.count} complaints${p.urgent ? ' (urgent)' : ''}`;
-const MAP_HEIGHT = 'clamp(320px, 55vh, 520px)';
+const MAP_HEIGHT = 'clamp(280px, 50vh, 520px)';
+const TAP = { minHeight: 44 };
 
 const LEGEND = [
-  { color: '#ffc107', label: 'Low' },
-  { color: '#fd7e14', label: 'Medium' },
-  { color: '#dc3545', label: 'High' },
+  { color: '#ffc107', key: 'low' },
+  { color: '#fd7e14', key: 'medium' },
+  { color: '#dc3545', key: 'high' },
 ];
 
-function Skeleton() {
+function Skeleton({ label }) {
   return (
     <div className="placeholder-glow" role="status" aria-live="polite" style={{ height: MAP_HEIGHT }}>
       <span className="placeholder w-100 h-100 rounded"></span>
-      <span className="visually-hidden">Loading map data</span>
+      <span className="visually-hidden">{label}</span>
     </div>
   );
 }
@@ -36,7 +37,7 @@ function SummaryItem({ label, value, variant }) {
       <Card className="border-0 shadow-sm h-100 text-center">
         <Card.Body className="py-2 px-1">
           <div className={`fs-4 fw-bold ${variant || ''}`}>{value}</div>
-          <small className="text-muted">{label}</small>
+          <small className="text-body-secondary">{label}</small>
         </Card.Body>
       </Card>
     </Col>
@@ -44,7 +45,14 @@ function SummaryItem({ label, value, variant }) {
 }
 
 function ComplaintsMap() {
+  const { t, formatDate } = useTranslation();
+  const tt = (k, p) => t(`admin.map.${k}`, p);
   const range = useDateRange();
+  const tooltipText = useCallback((p) => t(p.urgent ? 'admin.map.tooltipUrgent' : 'admin.map.tooltip', { count: p.count }), [t]);
+  let rangeText = tt('allTime');
+  if (range.from && range.to) rangeText = `${formatDate(range.from)} - ${formatDate(range.to)}`;
+  else if (range.from) rangeText = tt('dateFrom', { date: formatDate(range.from) });
+  else if (range.to) rangeText = tt('dateTo', { date: formatDate(range.to) });
   const [status, setStatus] = useState('');
   const [category, setCategory] = useState('');
   const { data, isLoading, isError, refetch, isFetching } = useHeatmap({
@@ -140,7 +148,7 @@ function ComplaintsMap() {
         { padding: [30, 30], maxZoom: 15 }
       );
     }
-  }, [points, maxCount, mapVisible]);
+  }, [points, maxCount, mapVisible, tooltipText]);
 
   const zoomTo = useCallback((h) => {
     const map = mapRef.current;
@@ -158,92 +166,105 @@ function ComplaintsMap() {
 
   const hotspotList = (
     <Card className="border-0 shadow-sm">
-      <Card.Header className="bg-body-tertiary fw-semibold">Top hotspots</Card.Header>
+      <Card.Header as="h2" className="bg-body-tertiary fw-semibold fs-6 mb-0">
+        {tt('topHotspots')}
+      </Card.Header>
       {hotspots.length === 0 ? (
-        <Card.Body className="text-muted small">No hotspots to show.</Card.Body>
+        <Card.Body className="text-body-secondary small">{tt('noHotspots')}</Card.Body>
       ) : (
-        <ListGroup variant="flush" as="ol">
-          {hotspots.map((h, i) => (
-            <ListGroup.Item
-              as="li"
-              key={`${h.latitude},${h.longitude}`}
-              action={!showFallback}
-              onClick={showFallback ? undefined : () => zoomTo(h)}
-              className="d-flex justify-content-between align-items-center gap-2"
-            >
-              <span>
-                <span className="text-muted me-2">{i + 1}.</span>
-                {h.latitude.toFixed(4)}, {h.longitude.toFixed(4)}
-                {showFallback && (
-                  <a
-                    className="ms-2 small"
-                    target="_blank"
-                    rel="noreferrer"
-                    href={`https://www.openstreetmap.org/?mlat=${h.latitude}&mlon=${h.longitude}#map=16/${h.latitude}/${h.longitude}`}
-                  >
-                    Open in OpenStreetMap
-                  </a>
-                )}
-              </span>
+        <ListGroup variant="flush" as="ol" className="list-unstyled">
+          {hotspots.map((h, i) => {
+            const coords = `${h.latitude.toFixed(4)}, ${h.longitude.toFixed(4)}`;
+            const badges = (
               <span className="text-nowrap">
                 <Badge bg="success">{h.count}</Badge>
                 {h.urgent && (
                   <Badge bg="danger" className="ms-1">
-                    urgent
+                    {tt('urgent')}
                   </Badge>
                 )}
               </span>
-            </ListGroup.Item>
-          ))}
+            );
+            return (
+              <ListGroup.Item as="li" key={`${h.latitude},${h.longitude}`} className="p-0">
+                {showFallback ? (
+                  <div className="d-flex justify-content-between align-items-center gap-2 px-3 py-2">
+                    <span>
+                      <span className="text-body-secondary me-2">{i + 1}.</span>
+                      {coords}
+                      <a
+                        className="ms-2 small d-inline-block py-2"
+                        target="_blank"
+                        rel="noreferrer"
+                        href={`https://www.openstreetmap.org/?mlat=${h.latitude}&mlon=${h.longitude}#map=16/${h.latitude}/${h.longitude}`}
+                      >
+                        {tt('openOsm')}
+                      </a>
+                    </span>
+                    {badges}
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    className="btn btn-link text-reset text-decoration-none text-start w-100 d-flex justify-content-between align-items-center gap-2 px-3 py-2 rounded-0"
+                    style={TAP}
+                    onClick={() => zoomTo(h)}
+                  >
+                    <span>
+                      <span className="text-body-secondary me-2">{i + 1}.</span>
+                      {coords}
+                    </span>
+                    {badges}
+                  </button>
+                )}
+              </ListGroup.Item>
+            );
+          })}
         </ListGroup>
       )}
     </Card>
   );
 
   return (
-    <Container className="py-4">
+    <Container className="py-3 py-md-4">
       <div className="mb-3">
-        <h2 className="fw-bold mb-1">
+        <h1 className="h2 fw-bold mb-1">
           <i className="fas fa-map-marked-alt me-2 text-success" aria-hidden="true"></i>
-          Complaint Map
-        </h2>
-        <p className="text-muted mb-0">
-          Where complaints are concentrated.{' '}
-          <span className="badge text-bg-secondary">{describeRange(range.from, range.to)}</span>
-          {isFetching && !isLoading && <span className="ms-2 small">Updating...</span>}
+          {tt('title')}
+        </h1>
+        <p className="text-body-secondary mb-0">
+          {tt('subtitle')} <span className="badge text-bg-secondary">{rangeText}</span>
+          <span className="ms-2 small" role="status" aria-live="polite">
+            {isFetching && !isLoading ? tt('updating') : ''}
+          </span>
         </p>
       </div>
 
       <Card className="border-0 shadow-sm mb-3">
         <Card.Body>
           <Row className="g-2 mb-2">
-            <Col xs={6} md={3}>
+            <Col xs={12} sm={6} md={3}>
               <Form.Label htmlFor="map-status" className="small mb-1">
-                Status
+                {tt('status')}
               </Form.Label>
-              <Form.Select id="map-status" size="sm" value={status} onChange={(e) => setStatus(e.target.value)}>
-                <option value="">All statuses</option>
+              <Form.Select id="map-status" style={TAP} value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="">{tt('allStatuses')}</option>
                 {STATUSES.map((s) => (
                   <option key={s} value={s}>
-                    {statusLabel(s)}
+                    {statusLabel(t, s)}
                   </option>
                 ))}
               </Form.Select>
             </Col>
-            <Col xs={6} md={3}>
+            <Col xs={12} sm={6} md={3}>
               <Form.Label htmlFor="map-category" className="small mb-1">
-                Category
+                {tt('category')}
               </Form.Label>
-              <Form.Select
-                id="map-category"
-                size="sm"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
-              >
-                <option value="">All categories</option>
+              <Form.Select id="map-category" style={TAP} value={category} onChange={(e) => setCategory(e.target.value)}>
+                <option value="">{tt('allCategories')}</option>
                 {COMPLAINT_CATEGORIES.map((c) => (
                   <option key={c.value} value={c.value}>
-                    {c.label}
+                    {categoryLabel(t, c.value)}
                   </option>
                 ))}
               </Form.Select>
@@ -260,13 +281,13 @@ function ComplaintsMap() {
       </Card>
 
       {isError && !hasData ? (
-        <ErrorState message="Failed to load map data." onRetry={() => refetch()} />
+        <ErrorState message={tt('loadFailed')} onRetry={() => refetch()} />
       ) : (
         <>
-          <Row className="g-2 mb-3" aria-label="Summary">
-            <SummaryItem label="Locations" value={isLoading ? '-' : summary.locations} />
-            <SummaryItem label="Total complaints" value={isLoading ? '-' : summary.complaints} />
-            <SummaryItem label="Urgent hotspots" value={isLoading ? '-' : summary.urgent} variant="text-danger" />
+          <Row className="g-2 mb-3" role="group" aria-label={tt('summary')}>
+            <SummaryItem label={tt('locations')} value={isLoading ? '-' : summary.locations} />
+            <SummaryItem label={tt('totalComplaints')} value={isLoading ? '-' : summary.complaints} />
+            <SummaryItem label={tt('urgentHotspots')} value={isLoading ? '-' : summary.urgent} variant="text-danger" />
           </Row>
 
           <Row className="g-3">
@@ -274,14 +295,11 @@ function ComplaintsMap() {
               <Card className="border-0 shadow-sm">
                 <Card.Body className="p-2 position-relative">
                   {isLoading || mapState === 'loading' ? (
-                    <Skeleton />
+                    <Skeleton label={tt('loadingMap')} />
                   ) : showFallback ? (
-                    <div className="p-3">
-                      <ErrorState
-                        message="The map could not be loaded. Showing the hotspot list instead."
-                        onRetry={() => setAttempt((a) => a + 1)}
-                      />
-                      {!hasData && <EmptyState icon="map-marked-alt" message="No complaints in this range" />}
+                    <div className="p-2 p-md-3">
+                      <ErrorState message={tt('mapFailed')} onRetry={() => setAttempt((a) => a + 1)} />
+                      {!hasData && <EmptyState icon="map-marked-alt" message={tt('noComplaints')} />}
                     </div>
                   ) : (
                     <>
@@ -289,24 +307,24 @@ function ComplaintsMap() {
                         ref={containerRef}
                         data-testid="heatmap-container"
                         role="application"
-                        aria-label="Complaint heatmap"
+                        aria-label={tt('mapAria')}
                         style={{ height: MAP_HEIGHT, borderRadius: 6 }}
                       />
                       {!hasData && (
                         <div
-                          className="position-absolute top-50 start-50 translate-middle bg-body rounded shadow px-4 py-2"
+                          className="position-absolute top-50 start-50 translate-middle bg-body rounded shadow px-3 px-md-4 py-2 w-75"
                           style={{ zIndex: 1000 }}
                         >
-                          <EmptyState icon="map-marked-alt" message="No complaints in this range" />
+                          <EmptyState icon="map-marked-alt" message={tt('noComplaints')} className="py-2" />
                         </div>
                       )}
                     </>
                   )}
                   {!showFallback && (
-                    <div className="d-flex flex-wrap align-items-center gap-3 small mt-2 px-1" aria-label="Legend">
-                      <strong>Legend</strong>
+                    <div className="d-flex flex-wrap align-items-center gap-2 gap-md-3 small mt-2 px-1" role="group" aria-label={tt('legend')}>
+                      <strong>{tt('legend')}</strong>
                       {LEGEND.map((l) => (
-                        <span key={l.label} className="d-inline-flex align-items-center gap-1">
+                        <span key={l.key} className="d-inline-flex align-items-center gap-1">
                           <span
                             aria-hidden="true"
                             style={{
@@ -318,7 +336,7 @@ function ComplaintsMap() {
                               border: '1px solid #6c757d',
                             }}
                           ></span>
-                          {l.label}
+                          {tt(`legend_${l.key}`)}
                         </span>
                       ))}
                       <span className="d-inline-flex align-items-center gap-1">
@@ -332,9 +350,9 @@ function ComplaintsMap() {
                             border: '3px solid #dc3545',
                           }}
                         ></span>
-                        Has urgent
+                        {tt('hasUrgent')}
                       </span>
-                      <span className="text-muted">Bigger circle = more complaints</span>
+                      <span className="text-body-secondary">{tt('biggerCircle')}</span>
                     </div>
                   )}
                 </Card.Body>

@@ -8,10 +8,10 @@ Cypress.Commands.add('users', () => cy.fixture('users.generated.json'));
 
 // Logs in through the API and seeds localStorage before the app boots (fast, no UI flake).
 // Use cy.loginViaUi in the specs that actually test the login form.
-Cypress.Commands.add('loginAs', (role, path) => {
+Cypress.Commands.add('loginAs', (role, path, { lang } = {}) => {
   cy.users().then((users) => {
     const { email, password } = users[role];
-    cy.request('POST', `${API()}/auth/login`, { email, password }).then(({ body }) => {
+    cy.task('login', { apiUrl: API(), email, password }).then((body) => {
       const user = { user_id: body.user_id, name: body.name, email: body.email, role: body.role };
       cy.wrap(body.accessToken, { log: false }).as('accessToken');
       cy.visit(path, {
@@ -19,6 +19,7 @@ Cypress.Commands.add('loginAs', (role, path) => {
           win.localStorage.setItem('accessToken', body.accessToken);
           win.localStorage.setItem('refreshToken', body.refreshToken);
           win.localStorage.setItem('user', JSON.stringify(user));
+          if (lang) win.localStorage.setItem('sgs-lang', lang);
         },
       });
     });

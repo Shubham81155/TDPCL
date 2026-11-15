@@ -50,7 +50,7 @@ Everything the suite creates is tagged and removed by `e2e-seed.js down`:
 
 ## Notes
 
+- `responsive.cy.js` loads every page at 360px in English and Hindi and fails on horizontal scroll.
+- Logins are cached per account in the Cypress node process (the API rate-limits `/auth/login`).
 - The admin reassign test changes the officer of a complaint; it should be run against a dev
   database, not shared data.
-- Admin pages still use hard-coded English strings, so their specs assert on English text.
-  Citizen and officer pages are translated; the specs run in the default (English) language.

@@ -3,6 +3,21 @@
 // `node ../smart-garbage-backend/scripts/e2e-seed.js up`. See docs/E2E.md.
 const { defineConfig } = require('cypress');
 
+const sessions = new Map();
+const cachedLogin = async (apiUrl, email, password) => {
+  const key = `${apiUrl}|${email}`;
+  if (!sessions.has(key)) {
+    const res = await fetch(`${apiUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    });
+    if (!res.ok) throw new Error(`login failed for ${email}: ${res.status}`);
+    sessions.set(key, await res.json());
+  }
+  return sessions.get(key);
+};
+
 module.exports = defineConfig({
   retries: { runMode: 1, openMode: 0 },
   video: false,
@@ -24,15 +39,12 @@ module.exports = defineConfig({
     supportFile: 'cypress/support/e2e.js',
     setupNodeEvents(on) {
       on('task', {
+        // One login per account per run: the API rate-limits /auth/login (10 per window).
+        login: ({ apiUrl, email, password }) => cachedLogin(apiUrl, email, password),
+
         // Creates a complaint through the real API as the given citizen (multipart, Node 18+ fetch).
         async createComplaint({ apiUrl, email, password, latitude, longitude, category = 'plastics', urgency_level = 'medium', description = 'e2e seeded complaint' }) {
-          const login = await fetch(`${apiUrl}/auth/login`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email, password }),
-          });
-          if (!login.ok) throw new Error(`login failed: ${login.status}`);
-          const { accessToken } = await login.json();
+          const { accessToken } = await cachedLogin(apiUrl, email, password);
 
           const png = require('fs').readFileSync(require('path').join(__dirname, 'cypress/fixtures/complaint.png'));
           const form = new FormData();

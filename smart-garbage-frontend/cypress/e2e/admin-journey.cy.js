@@ -22,7 +22,7 @@ describe('Admin journey', () => {
     beforeEach(() => cy.loginAs('admin', '/admin/complaints'));
 
     it('lists complaints with status chips', () => {
-      cy.contains('h2', 'All Complaints').should('be.visible');
+      cy.contains('h1', 'All Complaints').should('be.visible');
       cy.get('[role="group"][aria-label="Filter by status"] button').should('have.length.greaterThan', 1);
       cy.get('tbody tr').should('have.length.greaterThan', 0);
     });
