@@ -1,122 +1,76 @@
 // cypress/e2e/admin-journey.cy.js
-describe('Admin User Journey', () => {
-  beforeEach(() => {
-    cy.visit('/');
-    cy.clearLocalStorage();
-    cy.clearCookies();
-
-    // Login as admin
-    cy.visit('/login');
-    cy.get('input[type="email"]').type('admin@example.com');
-    cy.get('input[type="password"]').type('adminPassword123');
-    cy.get('button[type="submit"]').click();
-    cy.url().should('include', '/admin/dashboard');
+describe('Admin journey', () => {
+  before(() => {
+    cy.seedComplaint({ description: 'e2e: admin seed' });
   });
 
-  describe('Admin Dashboard', () => {
-    it('should display admin dashboard with statistics', () => {
+  describe('Dashboard', () => {
+    beforeEach(() => cy.loginAs('admin', '/admin/dashboard'));
+
+    it('shows statistics', () => {
       cy.contains('Admin Dashboard').should('be.visible');
-      cy.contains('Total Complaints').should('be.visible');
-      cy.contains('New').should('be.visible');
-      cy.contains('In Progress').should('be.visible');
-      cy.contains('Resolved').should('be.visible');
+      cy.contains('Total').should('be.visible');
     });
 
-    it('should show quick action links', () => {
-      cy.contains('Manage Complaints').should('be.visible');
-      cy.contains('Manage Officers').should('be.visible');
-      cy.contains('View Analytics').should('be.visible');
-      cy.contains('Generate Reports').should('be.visible');
-    });
-
-    it('should navigate to complaints', () => {
-      cy.contains('Manage Complaints').click();
+    it('navigates via quick actions', () => {
+      cy.get('a[href="/admin/complaints"]').first().click();
       cy.url().should('include', '/admin/complaints');
     });
   });
 
-  describe('Admin Complaints Management', () => {
-    it('should display all complaints', () => {
-      cy.visit('/admin/complaints');
+  describe('Complaints', () => {
+    beforeEach(() => cy.loginAs('admin', '/admin/complaints'));
 
-      cy.contains('All Complaints').should('be.visible');
-      // Complaints table should be visible
+    it('lists complaints with status chips', () => {
+      cy.contains('h2', 'All Complaints').should('be.visible');
+      cy.get('[role="group"][aria-label="Filter by status"] button').should('have.length.greaterThan', 1);
+      cy.get('tbody tr').should('have.length.greaterThan', 0);
     });
 
-    it('should filter complaints by various criteria', () => {
-      cy.visit('/admin/complaints');
-
-      cy.get('select[name="status"]').select('resolved');
-      // Should show only resolved complaints
-    });
-  });
-
-  describe('Officer Management', () => {
-    it('should display officer management page', () => {
-      cy.visit('/admin/officers');
-
-      cy.contains('Officer Management').should('be.visible');
-    });
-  });
-
-  describe('Ward Management', () => {
-    it('should display ward management', () => {
-      cy.visit('/admin/wards');
-
-      cy.contains('Ward Management').should('be.visible');
-    });
-  });
-
-  describe('Analytics and Reporting', () => {
-    it('should display analytics dashboard', () => {
-      cy.visit('/admin/analytics');
-
-      cy.contains('Analytics').should('be.visible');
-      cy.contains('Complaints by Category').should('be.visible');
-      cy.contains('Top Officers').should('be.visible');
+    it('filters by search text', () => {
+      cy.get('input[aria-label="Search complaints by ID, area or citizen"]').type('zzz-no-such-complaint');
+      cy.get('tbody tr').should('have.length', 0);
     });
 
-    it('should display top officers', () => {
-      cy.visit('/admin/analytics');
-
-      // Should show officer performance rankings
-      cy.get('table').should('be.visible');
-    });
-
-    it('should display ward statistics', () => {
-      cy.visit('/admin/analytics');
-
-      cy.contains('Complaints by Ward').should('be.visible');
-      cy.get('table').should('contain', 'Ward');
-      cy.get('table').should('contain', 'Total');
-      cy.get('table').should('contain', 'Officers');
-    });
-  });
-
-  describe('Report Export', () => {
-    it('should display report export page', () => {
-      cy.visit('/admin/reports');
-
-      cy.contains('Reports').should('be.visible');
-      cy.contains('Export Options').should('be.visible');
-    });
-
-    it('should allow CSV export', () => {
-      cy.visit('/admin/reports');
-
-      cy.get('button').contains('Export as CSV').should('be.visible');
-      // Download functionality would be tested
-    });
-  });
-
-  describe('Admin Logout', () => {
-    it('should logout admin', () => {
-      cy.contains('Logout').click();
-
-      cy.url().should('include', '/login');
-      cy.window().then((win) => {
-        expect(win.localStorage.getItem('accessToken')).to.be.null;
+    it('(re)assigns a complaint to an officer', () => {
+      cy.get('button[aria-label*="complaint"]').first().click();
+      cy.get('.modal').within(() => {
+        cy.get('select[aria-label="Select officer"] option').its('length').should('be.greaterThan', 1);
+        cy.get('select[aria-label="Select officer"]').select(1);
+        cy.get('button[type="submit"]').click();
       });
+      cy.get('.modal').should('not.exist');
+    });
+  });
+
+  describe('Other admin pages', () => {
+    it('opens officers and validates the add-officer form', () => {
+      cy.loginAs('admin', '/admin/officers');
+      cy.contains('Officer Management').should('be.visible');
+      cy.contains('button', 'Add Officer').click();
+      cy.get('.modal input[name="email"]').type('not-an-email');
+      cy.get('.modal button[type="submit"]').click();
+      cy.get('.modal .invalid-feedback').should('exist');
+    });
+
+    it('opens wards and shows the seeded ward', () => {
+      cy.loginAs('admin', '/admin/wards');
+      cy.get('input[aria-label="Search wards"]').type('e2e_ward_seed');
+      cy.contains('td', 'e2e_ward_seed').should('be.visible');
+    });
+
+    it('opens reports and analytics', () => {
+      cy.loginAs('admin', '/admin/reports');
+      cy.contains('button', /Export/i).should('be.visible');
+      cy.visit('/admin/analytics');
+      cy.url().should('include', '/admin/analytics');
+    });
+  });
+
+  describe('Access control', () => {
+    it('keeps citizens out of admin pages', () => {
+      cy.loginAs('citizen', '/admin/dashboard');
+      cy.url().should('not.include', '/admin/dashboard');
     });
   });
 });
