@@ -7,17 +7,20 @@ const jwt = require('jsonwebtoken');
 const { db } = require('../config/database');
 const { generateToken, generateRefreshToken } = require('../middleware/auth');
 const notificationService = require('./notificationService');
+const { normalizeEmail } = require('../utils/email');
 
 // Register new user (Citizen)
 const registerUser = async (userData) => {
   // Public registration always creates a citizen; officers/admins are created by admins.
-  const { email, password, name = email.split('@')[0], phone = null } = userData;
+  const { password, phone = null } = userData;
+  const email = normalizeEmail(userData.email);
+  const name = userData.name === undefined ? String(userData.email).trim().split('@')[0] : userData.name;
   const role = 'citizen';
 
   try {
     // Check if user exists
     const existingUser = await db.oneOrNone(
-      'SELECT user_id FROM users WHERE email = $1',
+      'SELECT user_id FROM users WHERE LOWER(email) = LOWER($1)',
       [email]
     );
 
@@ -56,8 +59,10 @@ const loginUser = async (email, password) => {
   try {
     // Find user by email
     const user = await db.oneOrNone(
-      'SELECT user_id, name, email, password_hash, role, status FROM users WHERE email = $1',
-      [email]
+      // Case-insensitive; an exact-case match wins if legacy data holds several rows for one mailbox.
+      `SELECT user_id, name, email, password_hash, role, status FROM users
+        WHERE LOWER(email) = LOWER($1) ORDER BY (email = $1) DESC, user_id LIMIT 1`,
+      [typeof email === 'string' ? email.trim() : email]
     );
 
     if (!user) {

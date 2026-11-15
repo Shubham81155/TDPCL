@@ -100,6 +100,11 @@ describe('createOfficer', () => {
     expect(db._tx.one.mock.calls[1][1]).toEqual([8, 'E1', null, 'A', 2020]);
     expect(db._tx.none).toHaveBeenCalledWith(expect.stringContaining('user_preferences'), [8, 'p']);
   });
+  it('stores the officer email trimmed and lower-cased', async () => {
+    db._tx.one.mockResolvedValueOnce({ user_id: 8, name: 'N' }).mockResolvedValueOnce({ officer_id: 3, user_id: 8 });
+    await svc.createOfficer({ ...data, email: '  Officer@Example.COM ' });
+    expect(db._tx.one.mock.calls[0][1][1]).toBe('officer@example.com');
+  });
   it('passes through constraint errors, wraps others', async () => {
     db._tx.one.mockRejectedValueOnce(Object.assign(new Error('dup'), { code: '23505' }));
     await expect(svc.createOfficer(data)).rejects.toMatchObject({ code: '23505' });

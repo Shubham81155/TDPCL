@@ -133,10 +133,34 @@ describe('errorHandler', () => {
     expect(res.json.mock.calls[0][0].error).toBe('Token expired');
   });
 
-  test('pg constraint violation (23xxx) -> 400', () => {
-    const res = call({ code: '23505', message: 'dup' });
-    expect(res.status).toHaveBeenCalledWith(400);
-    expect(res.json).toHaveBeenCalledWith({ success: false, error: 'Database constraint violation', details: 'dup' });
+  test('pg unique violation -> 409 with the column named, never the driver text or value', () => {
+    const res = call({
+      code: '23505',
+      message: 'duplicate key value violates unique constraint "officers_employee_id_key"',
+      detail: 'Key (employee_id)=(E2E-0001) already exists.',
+    });
+    expect(res.status).toHaveBeenCalledWith(409);
+    const body = res.json.mock.calls[0][0];
+    expect(body).toEqual({ success: false, error: 'A record with this employee id already exists', field: 'employee_id' });
+    expect(JSON.stringify(body)).not.toMatch(/E2E-0001|officers_employee_id_key|duplicate key/);
+  });
+
+  test.each([
+    ['23503', 409, 'This record refers to, or is still used by, other data'],
+    ['23502', 400, 'A required value is missing'],
+    ['23514', 400, 'A value is outside the allowed range'],
+    ['23000', 400, 'The data could not be saved'],
+    ['23505', 409, 'This record already exists'], // no detail available
+  ])('pg %s without detail -> %i', (code, status, message) => {
+    const res = call({ code, message: 'raw driver text' });
+    expect(res.status).toHaveBeenCalledWith(status);
+    expect(res.json).toHaveBeenCalledWith({ success: false, error: message });
+  });
+
+  test('lower(email) unique index reports the plain column', () => {
+    const res = call({ code: '23505', message: 'm', detail: 'Key (lower(email::text))=(a@b.c) already exists.' });
+    expect(res.json.mock.calls[0][0].error).toMatch(/^A record with this /);
+    expect(JSON.stringify(res.json.mock.calls[0][0])).not.toContain('a@b.c');
   });
 
   test('default 500 shape; honors err.status; stack only in development', () => {
