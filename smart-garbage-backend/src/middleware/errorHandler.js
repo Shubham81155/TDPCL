@@ -3,6 +3,33 @@
 
 const logger = require('../utils/logger');
 
+// Turns a Postgres integrity error (SQLSTATE 23xxx) into a message a user can act on.
+// Never echoes the driver message, constraint name or offending value (they expose schema/data).
+const describeConstraintError = (err) => {
+  // pg's `detail` looks like: Key (employee_id)=(E2E-0001) already exists.  Only the column is used.
+  const match = /Key \((.+?)\)=\(/.exec(err.detail || '');
+  const field = match
+    ? match[1].split(',')[0].trim().replace(/^lower\((.*)\)$/i, '$1').replace(/::\w+/g, '')
+    : null;
+  const label = field ? field.replace(/_/g, ' ') : null;
+  switch (err.code) {
+    case '23505':
+      return {
+        status: 409,
+        field,
+        message: label ? `A record with this ${label} already exists` : 'This record already exists',
+      };
+    case '23503':
+      return { status: 409, field, message: 'This record refers to, or is still used by, other data' };
+    case '23502':
+      return { status: 400, field, message: label ? `${label} is required` : 'A required value is missing' };
+    case '23514':
+      return { status: 400, field, message: 'A value is outside the allowed range' };
+    default:
+      return { status: 400, field, message: 'The data could not be saved' };
+  }
+};
+
 const errorHandler = (err, req, res, next) => {
   err = err || {};
   const requestId = req && req.id;
@@ -43,10 +70,12 @@ const errorHandler = (err, req, res, next) => {
 
   // Database errors
   if (typeof err.code === 'string' && err.code.startsWith('23')) {
-    return res.status(400).json({
+    const { status: dbStatus, message: dbMessage, field } = describeConstraintError(err);
+    return res.status(dbStatus).json({
       success: false,
-      error: 'Database constraint violation',
-      details: err.message,
+      error: dbMessage,
+      ...(field && { field }),
+      ...(requestId && { requestId }),
     });
   }
 

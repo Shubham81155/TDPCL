@@ -7,7 +7,8 @@ The E2E suite drives the real UI against a running API and database. It lives in
 
 ```bash
 # 1. Start the stack (needs PostgreSQL/PostGIS, migrated)
-cd smart-garbage-backend  && npm start          # API on :5000
+cd smart-garbage-backend  && NODE_ENV=test npm start   # API on :5000 (test mode disables the global rate limiter,
+                                                         # which the click audit would otherwise exceed)
 cd smart-garbage-frontend && npm start          # UI  on :3000
 
 # 2. Create the tagged fixtures (users + ward) and the credentials fixture
@@ -47,6 +48,15 @@ Everything the suite creates is tagged and removed by `e2e-seed.js down`:
 
 `down` exits non-zero if any tagged row remains. The script refuses to run when
 `NODE_ENV=production` and never touches untagged data.
+
+## Specs
+
+| Spec | What it proves |
+|------|----------------|
+| `citizen-journey`, `officer-journey`, `admin-journey` | the main happy paths and validation per role |
+| `click-audit` | every enabled button/link/summary on every page can be clicked with no uncaught exception, error boundary, console error or failed API call (destructive actions skipped) |
+| `features` | behaviour the audit cannot judge: officer add/delete (and declined confirm), ward create/edit/validation, CSV export, the citizen to officer to citizen lifecycle, language and theme persistence, password-reset pages, maps, route guards, geolocation |
+| `responsive` | no horizontal scroll at 360px in English and Hindi |
 
 ## Notes
 
