@@ -186,6 +186,29 @@ describe('Preferences', () => {
   });
 });
 
+describe('Email case-insensitivity', () => {
+  it('refuses to register an existing email typed in a different case', () => {
+    cy.users().then((u) => {
+      cy.visit('/register');
+      cy.get('input[name="email"]').type(u.citizen.email.toUpperCase());
+      cy.get('input[name="password"]').type('E2e!Passw0rd#2026', { log: false });
+      cy.get('button[type="submit"]').click();
+      cy.contains('already exists').should('be.visible');
+      cy.url().should('include', '/register');
+    });
+  });
+
+  it('logs in with the email typed in upper case', () => {
+    cy.users().then((u) => {
+      cy.visit('/login');
+      cy.get('input[type="email"]').type(u.citizen.email.toUpperCase());
+      cy.get('input[type="password"]').type(u.citizen.password, { log: false });
+      cy.get('button[type="submit"]').click();
+      cy.url().should('include', '/citizen/dashboard');
+    });
+  });
+});
+
 describe('Password reset pages', () => {
   it('forgot-password validates, then confirms without revealing whether the account exists', () => {
     cy.visit('/forgot-password');

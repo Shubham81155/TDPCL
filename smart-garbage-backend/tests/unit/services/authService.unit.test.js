@@ -48,11 +48,34 @@ describe('registerUser', () => {
     expect(db.none).not.toHaveBeenCalled();
   });
 
+  it('stores the email trimmed and lower-cased and checks duplicates ignoring case', async () => {
+    db.oneOrNone.mockResolvedValue(null);
+    db.one.mockResolvedValue({ user_id: 9 });
+    await svc.registerUser({ email: '  Jane.Doe@Example.COM ', password: 'pw' });
+    expect(db.oneOrNone.mock.calls[0][0]).toContain('LOWER(email) = LOWER($1)');
+    expect(db.oneOrNone.mock.calls[0][1]).toEqual(['jane.doe@example.com']);
+    const params = db.one.mock.calls[0][1];
+    expect(params[1]).toBe('jane.doe@example.com');
+    expect(params[0]).toBe('Jane.Doe'); // default name keeps the typed case
+  });
+
   it('creates preferences row when phone given', async () => {
     db.oneOrNone.mockResolvedValue(null);
     db.one.mockResolvedValue({ user_id: 7 });
     await svc.registerUser({ email: 'a@b.c', password: 'pw', name: 'N', phone: '123' });
     expect(db.none).toHaveBeenCalledWith(expect.stringContaining('user_preferences'), [7, '123']);
+  });
+});
+
+describe('loginUser email matching', () => {
+  it('looks the account up case-insensitively, preferring an exact-case row', async () => {
+    db.oneOrNone.mockResolvedValue(null);
+    await expect(svc.loginUser(' Jane@X.com ', 'p')).rejects.toThrow('Invalid email or password');
+    const sql = db.oneOrNone.mock.calls[0][0];
+    expect(sql).toContain('LOWER(email) = LOWER($1)');
+    expect(sql).toContain('ORDER BY (email = $1) DESC');
+    expect(sql).toContain('LIMIT 1');
+    expect(db.oneOrNone.mock.calls[0][1]).toEqual(['Jane@X.com']);
   });
 });
 

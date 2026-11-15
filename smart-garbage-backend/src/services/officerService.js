@@ -4,6 +4,7 @@
 const bcrypt = require('bcryptjs');
 const { db } = require('../config/database');
 const AppError = require('../utils/AppError');
+const { normalizeEmail } = require('../utils/email');
 
 const officerFilter = ({ status = 'active', wardId } = {}) => {
   const params = [];
@@ -139,7 +140,7 @@ const createOfficer = async (officerData) => {
         `INSERT INTO users (name, email, phone, password_hash, role, status)
          VALUES ($1, $2, $3, $4, 'officer', 'active')
          RETURNING user_id, name, email, phone`,
-        [name, email, phone, hashedPassword]
+        [name, normalizeEmail(email), phone, hashedPassword]
       );
 
       const officer = await t.one(
