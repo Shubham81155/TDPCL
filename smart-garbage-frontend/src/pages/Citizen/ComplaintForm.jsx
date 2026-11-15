@@ -186,7 +186,7 @@ function ComplaintForm() {
         <Col lg={8} className="mx-auto px-0">
           <Card className="border-0 shadow-lg">
             <Card.Header className="bg-success text-white">
-              <Card.Title className="mb-0 h5">
+              <Card.Title as="h1" className="mb-0 h5">
                 <i className="fas fa-plus-circle me-2"></i>
                 {t('citizen.form.title')}
               </Card.Title>

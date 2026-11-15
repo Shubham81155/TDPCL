@@ -16,6 +16,7 @@
     "react-chartjs-2": "^5.2.0"
   },
   "devDependencies": {
+    "cypress": "15.21.1",
     "react-scripts": "5.0.1",
     "@testing-library/react": "^14.1.2",
     "@testing-library/jest-dom": "^6.1.4",
@@ -25,6 +26,8 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
+    "cy:open": "cypress open",
+    "cy:run": "cypress run",
     "eject": "react-scripts eject"
   },
   "eslintConfig": {

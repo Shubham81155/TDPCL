@@ -35,3 +35,10 @@ yarn-error.log*
 Thumbs.db
 .AppleDouble
 .LSOverride
+
+# Cypress (E2E)
+/cypress/screenshots
+/cypress/downloads
+/cypress/videos
+# credentials written by smart-garbage-backend/scripts/e2e-seed.js
+/cypress/fixtures/users.generated.json

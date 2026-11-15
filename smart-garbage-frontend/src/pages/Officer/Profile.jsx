@@ -48,7 +48,7 @@ function OfficerProfile() {
         <Col lg={8} className="mx-auto">
           <Card className="border-0 shadow-lg mb-4">
             <Card.Header className="bg-primary text-white">
-              <Card.Title className="mb-0">{t('officer.profile.title')}</Card.Title>
+              <Card.Title as="h1" className="h4 mb-0">{t('officer.profile.title')}</Card.Title>
             </Card.Header>
 
             <Card.Body>
@@ -109,7 +109,7 @@ function OfficerProfile() {
           {metrics && (
             <Card className="border-0 shadow-lg">
               <Card.Header className="bg-success text-white">
-                <Card.Title className="mb-0">{t('officer.profile.metrics')}</Card.Title>
+                <Card.Title as="h2" className="h5 mb-0">{t('officer.profile.metrics')}</Card.Title>
               </Card.Header>
 
               <Card.Body>
