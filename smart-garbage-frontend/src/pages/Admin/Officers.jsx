@@ -9,6 +9,7 @@ import ErrorState from '../../components/common/ErrorState';
 import ConfirmModal from '../../components/common/ConfirmModal';
 import { useTranslation } from '../../i18n/LanguageContext';
 import { queryClient } from '../../queryClient';
+import { useWards } from '../../hooks/useWards';
 
 const touch = { minHeight: 44 };
 
@@ -52,12 +53,14 @@ const emptyForm = () => ({
   email: '',
   password: '',
   employee_id: '',
-  assigned_area_name: '',
+  ward_id: '',
   year_of_joining: new Date().getFullYear(),
 });
 
 function AdminOfficers() {
   const { t } = useTranslation();
+  const { data: wardsData, isLoading: wardsLoading } = useWards();
+  const wards = wardsData || [];
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
@@ -94,7 +97,7 @@ function AdminOfficers() {
     if (!formData.password) newErrors.password = t('admin.officers.errPasswordRequired');
     else if (formData.password.length < 6) newErrors.password = t('admin.officers.errPasswordShort');
     if (!formData.employee_id) newErrors.employee_id = t('admin.officers.errEmployeeRequired');
-    if (!formData.assigned_area_name) newErrors.assigned_area_name = t('admin.officers.errAreaRequired');
+    if (!formData.ward_id) newErrors.ward_id = t('admin.officers.errAreaRequired');
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -123,7 +126,7 @@ function AdminOfficers() {
         email: formData.email,
         password: formData.password,
         employee_id: formData.employee_id,
-        assigned_area_name: formData.assigned_area_name,
+        ward_id: Number(formData.ward_id),
         year_of_joining: parseInt(formData.year_of_joining),
       });
 
@@ -315,7 +318,30 @@ function AdminOfficers() {
             {field('email', t('admin.officers.fieldEmail'), { type: 'email', placeholder: t('admin.officers.phEmail'), autoComplete: 'off' })}
             {field('password', t('admin.officers.fieldPassword'), { type: 'password', placeholder: t('admin.officers.phPassword'), autoComplete: 'new-password' })}
             {field('employee_id', t('admin.officers.fieldEmployeeId'), { type: 'text', placeholder: t('admin.officers.phEmployeeId') })}
-            {field('assigned_area_name', t('admin.officers.fieldArea'), { type: 'text', placeholder: t('admin.officers.phArea') })}
+            <Form.Group className="mb-3" controlId="officer-ward_id">
+              <Form.Label>{t('admin.officers.fieldArea')}</Form.Label>
+              <Form.Select
+                name="ward_id"
+                value={formData.ward_id}
+                onChange={handleChange}
+                isInvalid={!!errors.ward_id}
+                aria-invalid={!!errors.ward_id}
+                aria-describedby={errors.ward_id ? 'officer-ward_id-error' : 'officer-ward_id-help'}
+                disabled={wardsLoading}
+                style={touch}
+              >
+                <option value="">{t('admin.officers.phArea')}</option>
+                {wards.map((w) => (
+                  <option key={w.ward_id} value={w.ward_id}>
+                    {w.name}{w.city ? ` (${w.city})` : ''}
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Control.Feedback type="invalid" id="officer-ward_id-error">
+                {errors.ward_id}
+              </Form.Control.Feedback>
+              <Form.Text id="officer-ward_id-help" muted>{t('admin.officers.areaHelp')}</Form.Text>
+            </Form.Group>
             {field('year_of_joining', t('admin.officers.fieldYear'), { type: 'number', min: '2000', max: new Date().getFullYear() })}
 
             <div className="d-grid gap-2">

@@ -5,6 +5,7 @@ const bcrypt = require('bcryptjs');
 const { db } = require('../config/database');
 const AppError = require('../utils/AppError');
 const { normalizeEmail } = require('../utils/email');
+const { retryUnassignedSafely } = require('./assignmentService');
 
 const officerFilter = ({ status = 'active', wardId } = {}) => {
   const params = [];
@@ -128,6 +129,51 @@ const getOfficerMetricsForUser = async (userId) => {
   return getOfficerMetrics(officerId);
 };
 
+// Ward lookup for officer forms: the ward must exist; its name becomes the officer's area name.
+const requireWard = async (t, wardId) => {
+  const ward = await t.oneOrNone('SELECT ward_id, name FROM wards WHERE ward_id = $1', [wardId]);
+  if (!ward) throw AppError.badRequest('Ward not found');
+  return ward;
+};
+
+// Default an officer's location to the centroid of their ward. Locations the officer reported
+// themself (location_source = 'reported') are never overwritten.
+const applyWardCentroid = (t, officerId) =>
+  t.none(
+    `UPDATE officers o
+     SET location = ST_Centroid(w.boundaries), location_source = 'ward'
+     FROM wards w
+     WHERE o.officer_id = $1 AND w.ward_id = o.assigned_ward_id AND w.boundaries IS NOT NULL
+       AND (o.location IS NULL OR o.location_source IS DISTINCT FROM 'reported')`,
+    [officerId]
+  );
+
+// Put an officer's open complaints back in the auto-assignment queue (status 'new', no officer) and log it.
+const releaseOpenComplaints = async (t, officerId, statuses, reason) => {
+  const rows = await t.manyOrNone(
+    `SELECT complaint_id, status FROM complaints
+     WHERE assigned_officer_id = $1 AND status::text IN ($2:csv)
+     FOR UPDATE`,
+    [officerId, statuses]
+  );
+  if (!rows.length) return 0;
+  await t.none(
+    `UPDATE complaints
+     SET assigned_officer_id = NULL, status = 'new', updated_at = CURRENT_TIMESTAMP
+     WHERE complaint_id = ANY($1::int[])`,
+    [rows.map((r) => r.complaint_id)]
+  );
+  await t.none(
+    `INSERT INTO complaint_history (complaint_id, old_status, new_status, changed_by, comment)
+     SELECT x.c, x.s, 'new', NULL, $3
+     FROM unnest($1::int[], $2::text[]) AS x(c, s)`,
+    [rows.map((r) => r.complaint_id), rows.map((r) => r.status), reason]
+  );
+  return rows.length;
+};
+
+const OPEN_STATUSES = ['new', 'assigned', 'pending', 'in_progress'];
+
 // Create new officer (Admin only). User + officer + preferences are created atomically.
 const createOfficer = async (officerData) => {
   const { name, email, phone, password, employee_id, ward_id, area_name, year_of_joining } = officerData;
@@ -135,7 +181,9 @@ const createOfficer = async (officerData) => {
   try {
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    return await db.tx(async (t) => {
+    const created = await db.tx(async (t) => {
+      // A ward is the source of truth: its name becomes the area name and its centroid the default location.
+      const ward = ward_id ? await requireWard(t, ward_id) : null;
       const user = await t.one(
         `INSERT INTO users (name, email, phone, password_hash, role, status)
          VALUES ($1, $2, $3, $4, 'officer', 'active')
@@ -147,8 +195,9 @@ const createOfficer = async (officerData) => {
         `INSERT INTO officers (user_id, employee_id, assigned_ward_id, assigned_area_name, year_of_joining, status)
          VALUES ($1, $2, $3, $4, $5, 'active')
          RETURNING officer_id, user_id, employee_id`,
-        [user.user_id, employee_id, ward_id || null, area_name, year_of_joining]
+        [user.user_id, employee_id, ward ? ward.ward_id : null, ward ? ward.name : area_name, year_of_joining]
       );
+      if (ward) await applyWardCentroid(t, officer.officer_id);
 
       await t.none(
         `INSERT INTO user_preferences (user_id, sms_phone)
@@ -158,6 +207,10 @@ const createOfficer = async (officerData) => {
 
       return { ...officer, ...user };
     });
+
+    // A new officer may unblock complaints that were waiting for someone in their area
+    await retryUnassignedSafely();
+    return created;
   } catch (error) {
     throw AppError.wrap(error, 'Failed to create officer');
   }
@@ -165,10 +218,17 @@ const createOfficer = async (officerData) => {
 
 // Update officer
 const updateOfficer = async (officerId, updateData = {}) => {
-  const { name, phone, assigned_ward_id, assigned_area_name, status } = updateData;
+  const { name, phone, assigned_ward_id, status } = updateData;
+  let { assigned_area_name } = updateData;
+  const hasWard = assigned_ward_id !== undefined && assigned_ward_id !== null && assigned_ward_id !== '';
 
   try {
-    return await db.tx(async (t) => {
+    const result = await db.tx(async (t) => {
+      // Choosing a ward also sets the area name (kept in sync) and re-centres a non-reported location
+      if (hasWard) {
+        const ward = await requireWard(t, assigned_ward_id);
+        assigned_area_name = ward.name;
+      }
       const officer = await t.oneOrNone(
         `UPDATE officers
          SET assigned_ward_id = COALESCE($2, assigned_ward_id),
@@ -177,9 +237,18 @@ const updateOfficer = async (officerId, updateData = {}) => {
              updated_at = CURRENT_TIMESTAMP
          WHERE officer_id = $1
          RETURNING officer_id, user_id, assigned_ward_id, assigned_area_name, status`,
-        [officerId, assigned_ward_id, assigned_area_name, status]
+        [officerId, hasWard ? assigned_ward_id : null, assigned_area_name, status]
       );
       if (!officer) throw AppError.notFound('Officer not found');
+      if (hasWard) await applyWardCentroid(t, officerId);
+
+      // An officer who is away should not hold work they have not started; queue it for re-assignment
+      let released = 0;
+      if (status === 'on_leave') {
+        released = await releaseOpenComplaints(t, officerId, ['assigned'], 'Officer on leave: returned to the assignment queue');
+      } else if (status === 'inactive') {
+        released = await releaseOpenComplaints(t, officerId, OPEN_STATUSES, 'Officer deactivated: returned to the assignment queue');
+      }
 
       if (name || phone) {
         await t.none(
@@ -193,9 +262,13 @@ const updateOfficer = async (officerId, updateData = {}) => {
       }
 
       // Preserve the original response shape (user_id was not returned before)
-      const { user_id, ...result } = officer; // eslint-disable-line no-unused-vars
-      return result;
+      const { user_id, ...rest } = officer; // eslint-disable-line no-unused-vars
+      return { rest, released };
     });
+
+    // Back from leave, new ward or released work: let the queue pick it up
+    if (hasWard || status === 'active' || result.released > 0) await retryUnassignedSafely();
+    return result.rest;
   } catch (error) {
     throw AppError.wrap(error, 'Failed to update officer');
   }
@@ -216,6 +289,7 @@ const updateOfficerLocation = async (officerId, latitude, longitude) => {
     const updated = await db.oneOrNone(
       `UPDATE officers
        SET location = ST_SetSRID(ST_MakePoint($2::float8, $3::float8), 4326),
+           location_source = 'reported',
            updated_at = CURRENT_TIMESTAMP
        WHERE officer_id = $1
        RETURNING officer_id, updated_at`,
@@ -253,8 +327,8 @@ const getOfficerMetrics = async (officerId) => {
 // Deactivate officer and release their open complaints
 const deactivateOfficer = async (officerId) => {
   try {
-    return await db.tx(async (t) => {
-      const updated = await t.oneOrNone(
+    const updated = await db.tx(async (t) => {
+      const row = await t.oneOrNone(
         `UPDATE officers
          SET status = 'inactive',
              updated_at = CURRENT_TIMESTAMP
@@ -262,19 +336,13 @@ const deactivateOfficer = async (officerId) => {
          RETURNING officer_id, status`,
         [officerId]
       );
-      if (!updated) throw AppError.notFound('Officer not found');
+      if (!row) throw AppError.notFound('Officer not found');
 
-      await t.none(
-        `UPDATE complaints
-         SET assigned_officer_id = NULL,
-             status = 'new',
-             updated_at = CURRENT_TIMESTAMP
-         WHERE assigned_officer_id = $1 AND status NOT IN ('resolved', 'rejected')`,
-        [officerId]
-      );
-
-      return updated;
+      await releaseOpenComplaints(t, officerId, OPEN_STATUSES, 'Officer deactivated: returned to the assignment queue');
+      return row;
     });
+    await retryUnassignedSafely();
+    return updated;
   } catch (error) {
     throw AppError.wrap(error, 'Failed to deactivate officer');
   }
@@ -286,9 +354,12 @@ const deleteOfficer = async (officerId) => {
     await db.tx(async (t) => {
       const officer = await t.oneOrNone('SELECT user_id FROM officers WHERE officer_id = $1', [officerId]);
       if (!officer) throw AppError.notFound('Officer not found');
+      // Deleting would leave 'assigned' complaints with no officer; queue them for re-assignment instead
+      await releaseOpenComplaints(t, officerId, OPEN_STATUSES, 'Officer removed: returned to the assignment queue');
       await t.none('DELETE FROM officers WHERE officer_id = $1', [officerId]);
       await t.none('DELETE FROM users WHERE user_id = $1', [officer.user_id]);
     });
+    await retryUnassignedSafely();
   } catch (error) {
     throw AppError.wrap(error, 'Failed to delete officer');
   }

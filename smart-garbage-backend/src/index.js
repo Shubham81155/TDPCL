@@ -41,6 +41,18 @@ const start = async () => {
     }
   });
 
+  // Complaints that found no officer are retried periodically (0 disables; off under NODE_ENV=test)
+  const retryMin = config.assignment.retryIntervalMin;
+  let retryTimer = null;
+  if (retryMin > 0 && config.env !== 'test') {
+    const { retryUnassignedSafely } = require('./services/assignmentService');
+    retryTimer = setInterval(async () => {
+      const r = await retryUnassignedSafely();
+      if (r && r.assigned) logger.info('Assigned waiting complaints', r);
+    }, retryMin * 60 * 1000);
+    retryTimer.unref();
+  }
+
   server.on('error', (err) => {
     logger.error('Server error', { err });
     process.exit(1);
@@ -52,6 +64,7 @@ const start = async () => {
     shuttingDown = true;
     logger.info('Shutting down gracefully', { signal });
 
+    if (retryTimer) clearInterval(retryTimer);
     const force = setTimeout(() => {
       logger.error('Forced shutdown after timeout');
       process.exit(1);

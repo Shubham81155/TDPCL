@@ -13,7 +13,7 @@ describe('Admin: officers', () => {
     cy.get('.modal input[name="email"]').type(email);
     cy.get('.modal input[name="password"]').type('E2e!Passw0rd#2026', { log: false });
     cy.get('.modal input[name="employee_id"]').type(`E2E-${id}`);
-    cy.get('.modal input[name="assigned_area_name"]').type('E2E Area');
+    cy.get('.modal select[name="ward_id"]').select(1);
     cy.intercept('POST', '**/api/officers').as('add');
     cy.get('.modal button[type="submit"]').click();
     cy.wait('@add').its('response.statusCode').should('eq', 201);
@@ -44,7 +44,7 @@ describe('Admin: officers', () => {
     cy.get('.modal input[name="email"]').type(`e2e_dup_${stamp()}@example.com`);
     cy.get('.modal input[name="password"]').type('E2e!Passw0rd#2026', { log: false });
     cy.get('.modal input[name="employee_id"]').type('E2E-0001'); // belongs to the seeded officer
-    cy.get('.modal input[name="assigned_area_name"]').type('E2E Area');
+    cy.get('.modal select[name="ward_id"]').select(1);
     cy.get('.modal button[type="submit"]').click();
     cy.contains('A record with this employee id already exists').should('be.visible');
     cy.contains('constraint').should('not.exist'); // no database internals shown

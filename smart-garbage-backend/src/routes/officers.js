@@ -58,7 +58,7 @@ router.get('/:id', verifyToken, async (req, res) => {
 
 // Create new officer (Admin only)
 router.post('/', verifyToken, checkRole('admin'), async (req, res) => {
-  const { email, password, employee_id, assigned_area_name, year_of_joining, name, phone } = req.body || {};
+  const { email, password, employee_id, assigned_area_name, year_of_joining, name, phone, ward_id } = req.body || {};
 
   if (!email || !password || !employee_id) {
     throw AppError.badRequest('Missing required fields: email, password, employee_id');
@@ -78,7 +78,7 @@ router.post('/', verifyToken, checkRole('admin'), async (req, res) => {
     phone: phone || '0000000000',
     password,
     employee_id,
-    ward_id: null,
+    ward_id: ward_id === undefined || ward_id === null || ward_id === '' ? null : parseId(ward_id, 'ward_id'),
     area_name: assigned_area_name || 'Unassigned',
     year_of_joining: joined,
   });

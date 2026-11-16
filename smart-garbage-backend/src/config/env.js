@@ -48,6 +48,10 @@ const buildSchema = (env) => {
     SMTP_USER: Joi.string().allow(''),
     SMTP_PASSWORD: Joi.string().allow(''),
     LOG_LEVEL: Joi.string().valid('error', 'warn', 'info', 'debug').default('info'),
+    // Auto-assignment: nearest-officer fallback radius, per-officer open-complaint cap, backlog retry period (0 = off)
+    ASSIGN_MAX_RADIUS_KM: Joi.number().positive().empty('').default(10),
+    ASSIGN_MAX_OPEN_PER_OFFICER: Joi.number().integer().min(1).empty('').default(20),
+    ASSIGN_RETRY_INTERVAL_MIN: Joi.number().min(0).empty('').default(10),
   }).unknown(true);
 };
 
@@ -82,6 +86,11 @@ const loadConfig = (env = process.env) => {
     frontendOrigins: Object.freeze(parseOrigins(v.FRONTEND_URL)),
     storageProvider: v.STORAGE_PROVIDER,
     logLevel: v.LOG_LEVEL,
+    assignment: Object.freeze({
+      maxRadiusKm: v.ASSIGN_MAX_RADIUS_KM,
+      maxOpenPerOfficer: v.ASSIGN_MAX_OPEN_PER_OFFICER,
+      retryIntervalMin: v.ASSIGN_RETRY_INTERVAL_MIN,
+    }),
   });
 };
 

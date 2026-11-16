@@ -580,6 +580,22 @@ Response (200):
 
 ### Assignments & Geolocation
 
+#### Assign Waiting Complaints (Admin)
+```
+POST /assignments/auto-assign-unassigned
+Authorization: Bearer <admin token>
+
+Response (200):
+{
+  "success": true,
+  "message": "2 complaint(s) assigned",
+  "checked": 3,
+  "assigned": 2,
+  "remaining": 1
+}
+```
+Retries auto-assignment (ward, then area, then nearest) for every complaint with status `new` and no officer.
+
 #### Find Nearest Officers
 ```
 POST /assignments/nearest-officers
