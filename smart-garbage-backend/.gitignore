@@ -42,3 +42,9 @@ Thumbs.db
 
 # Test coverage output
 coverage/
+
+# Runtime uploads (local storage provider) and Python bytecode
+uploads/*
+!uploads/.gitkeep
+__pycache__/
+*.pyc

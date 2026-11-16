@@ -7,7 +7,6 @@
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
     "migrate": "node database/migrations/runMigrations.js",
-    "seed": "node database/seeds/runSeeds.js",
     "test": "jest --coverage",
     "test:watch": "jest --watch"
   },
