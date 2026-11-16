@@ -21,13 +21,9 @@ smart-garbage-backend/
 │   │   ├── complaints.js        # Complaint endpoints
 │   │   ├── officers.js          # Officer endpoints
 │   │   └── admin.js             # Admin endpoints
-│   ├── controllers/
 │   └── utils/
 ├── database/
-│   ├── migrations/
-│   │   ├── 001_initial_schema.sql
-│   │   └── 002_sample_data.sql
-│   └── seeds/
+│   └── migrations/              # 001..008, applied by `npm run migrate`
 ├── .env.example                 # Environment template
 ├── package.json
 └── README.md
@@ -79,12 +75,8 @@ createdb smart_garbage_db -U postgres
 # Enable PostGIS extension
 psql -U postgres -d smart_garbage_db -c "CREATE EXTENSION postgis;"
 
-# Run migrations
-psql -U postgres -d smart_garbage_db -f database/migrations/001_initial_schema.sql
-psql -U postgres -d smart_garbage_db -f database/migrations/004_add_ai_classification_fields.sql
-
-# Seed sample data
-psql -U postgres -d smart_garbage_db -f database/migrations/002_sample_data.sql
+# Run all migrations (001-008; sample data 002/003 is skipped when NODE_ENV=production)
+npm run migrate
 ```
 
 #### Option B: Using Docker (Recommended for local development)
