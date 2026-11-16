@@ -12,7 +12,7 @@ function NotFound() {
         <Col md={6} className="text-center">
           <div className="mb-4">
             <h1 className="display-1 fw-bold text-danger">404</h1>
-            <h2 className="fw-bold mb-2">{t('notFound.title')}</h2>
+            <h1 className="h2 fw-bold mb-2">{t('notFound.title')}</h1>
             <p className="text-muted mb-4">{t('notFound.text')}</p>
           </div>
 

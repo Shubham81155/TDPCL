@@ -4,12 +4,13 @@ import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useAssignedComplaints } from '../../hooks/useComplaints';
 import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import EmptyState from '../../components/common/EmptyState';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../i18n/LanguageContext';
 
 function OfficerDashboard() {
-  const { data, isLoading } = useAssignedComplaints();
+  const { data, isLoading, isError, refetch } = useAssignedComplaints();
   const { user } = useAuth();
   const { t } = useTranslation();
 
@@ -43,10 +44,10 @@ function OfficerDashboard() {
     <Container className="py-4">
       <Row className="mb-4">
         <Col>
-          <h2 className="fw-bold mb-2">
+          <h1 className="h2 fw-bold mb-2">
             <i className="fas fa-home me-2 text-primary"></i>
             {t('officer.dashboard.title')}
-          </h2>
+          </h1>
           <p className="text-muted">
             {t('officer.dashboard.welcome', { name: user?.name || t('officer.dashboard.officerFallback') })}
           </p>
@@ -55,6 +56,8 @@ function OfficerDashboard() {
 
       {isLoading ? (
         <LoadingState variant="cards" label={t('officer.dashboard.loading')} />
+      ) : isError ? (
+        <ErrorState message={t('common.loadFailed')} onRetry={refetch} />
       ) : (
         <>
           <Row className="mb-4">

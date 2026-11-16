@@ -13,7 +13,7 @@ describe('Admin: officers', () => {
     cy.get('.modal input[name="email"]').type(email);
     cy.get('.modal input[name="password"]').type('E2e!Passw0rd#2026', { log: false });
     cy.get('.modal input[name="employee_id"]').type(`E2E-${id}`);
-    cy.get('.modal input[name="assigned_area_name"]').type('E2E Area');
+    cy.get('.modal select[name="ward_id"]').select(1);
     cy.intercept('POST', '**/api/officers').as('add');
     cy.get('.modal button[type="submit"]').click();
     cy.wait('@add').its('response.statusCode').should('eq', 201);
@@ -22,9 +22,9 @@ describe('Admin: officers', () => {
     cy.get('input[aria-label]').filter('[placeholder*="Search"]').type(email);
     cy.contains(email).should('be.visible');
 
-    cy.on('window:confirm', () => true);
     cy.intercept('DELETE', '**/api/officers/*').as('del');
     cy.get(`button[aria-label="Delete officer ${email}"]:visible`).click();
+    cy.get('.modal-footer').contains('button', 'Delete').click();
     cy.wait('@del').its('response.statusCode').should('eq', 200);
     cy.contains('Officer deleted successfully!').should('be.visible');
     cy.contains(email).should('not.exist');
@@ -32,9 +32,9 @@ describe('Admin: officers', () => {
 
   it('does not delete when the confirmation is declined', () => {
     cy.loginAs('admin', '/admin/officers');
-    cy.on('window:confirm', () => false);
     cy.intercept('DELETE', '**/api/officers/*', cy.spy().as('delCall'));
     cy.get('button[aria-label^="Delete officer"]:visible').first().click();
+    cy.get('.modal-footer').contains('button', 'Cancel').click();
     cy.get('@delCall').should('not.have.been.called');
   });
 
@@ -44,7 +44,7 @@ describe('Admin: officers', () => {
     cy.get('.modal input[name="email"]').type(`e2e_dup_${stamp()}@example.com`);
     cy.get('.modal input[name="password"]').type('E2e!Passw0rd#2026', { log: false });
     cy.get('.modal input[name="employee_id"]').type('E2E-0001'); // belongs to the seeded officer
-    cy.get('.modal input[name="assigned_area_name"]').type('E2E Area');
+    cy.get('.modal select[name="ward_id"]').select(1);
     cy.get('.modal button[type="submit"]').click();
     cy.contains('A record with this employee id already exists').should('be.visible');
     cy.contains('constraint').should('not.exist'); // no database internals shown

@@ -6,6 +6,7 @@ import toast from 'react-hot-toast';
 import { loadLeaflet, TILE_URL, TILE_ATTRIBUTION } from '../../utils/leafletLoader';
 import { useTranslation } from '../../i18n/LanguageContext';
 import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import Skeleton from '../../components/common/Skeleton';
 
 const ACTIVE_COMPLAINT_STATUSES = new Set(['new', 'assigned', 'pending', 'in_progress']);
@@ -17,6 +18,8 @@ function OfficerMap() {
   tRef.current = t;
   const [complaints, setComplaints] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [leaflet, setLeaflet] = useState(null);
   const [mapError, setMapError] = useState(false);
   const [mapAttempt, setMapAttempt] = useState(0);
@@ -27,18 +30,20 @@ function OfficerMap() {
 
   useEffect(() => {
     const loadAssignedComplaints = async () => {
+      setLoadError(false);
       try {
         const response = await apiClient.get('/complaints/officer/assigned');
         setComplaints(response.data.data || []);
       } catch (error) {
         toast.error(tRef.current('officer.map.loadFailed'));
+        setLoadError(true);
       } finally {
         setIsLoading(false);
       }
     };
 
     loadAssignedComplaints();
-  }, []);
+  }, [loadAttempt]);
 
   const validLocations = useMemo(() => {
     return complaints
@@ -129,13 +134,18 @@ function OfficerMap() {
 
   return (
     <Container className="py-4">
-      <h2 className="fw-bold mb-4">
+      <h1 className="h2 fw-bold mb-4">
         <i className="fas fa-map-marked-alt me-2 text-primary"></i>
         {t('officer.map.title')}
-      </h2>
+      </h1>
 
       {isLoading ? (
         <LoadingState variant="table" label={t('officer.map.loading')} />
+      ) : loadError ? (
+        <ErrorState
+          message={t('officer.map.loadFailed')}
+          onRetry={() => { setIsLoading(true); setLoadAttempt((n) => n + 1); }}
+        />
       ) : validLocations.length === 0 ? (
         <Alert variant="info">
           <i className="fas fa-info-circle me-2"></i>

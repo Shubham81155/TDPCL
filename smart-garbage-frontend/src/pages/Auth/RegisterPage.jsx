@@ -78,7 +78,7 @@ function RegisterPage() {
         <Card.Body className="p-5">
           <div className="text-center mb-4">
             <i className="fas fa-trash text-success" style={{ fontSize: '3rem' }}></i>
-            <h2 className="mt-3 fw-bold">{t('auth.register.title')}</h2>
+            <h1 className="h2 mt-3 fw-bold">{t('auth.register.title')}</h1>
             <p className="text-muted">{t('auth.register.subtitle')}</p>
           </div>
 

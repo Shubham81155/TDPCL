@@ -4,6 +4,7 @@ import { Container, Row, Col, Card, Table, Button, Form, Modal, Pagination } fro
 import { useAssignedComplaints, useUpdateComplaintStatus } from '../../hooks/useComplaints';
 import toast from 'react-hot-toast';
 import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import EmptyState from '../../components/common/EmptyState';
 import StatusBadge from '../../components/common/StatusBadge';
 import { useTranslation } from '../../i18n/LanguageContext';
@@ -17,7 +18,7 @@ function AssignedComplaints() {
   const [showModal, setShowModal] = useState(false);
   const [statusUpdate, setStatusUpdate] = useState('');
   const pageSize = 10;
-  const { data, isLoading } = useAssignedComplaints({
+  const { data, isLoading, isError, refetch } = useAssignedComplaints({
     onError: () => toast.error(t('officer.assigned.loadFailed')),
   });
   const updateStatus = useUpdateComplaintStatus();
@@ -60,10 +61,10 @@ function AssignedComplaints() {
     <Container className="py-4">
       <Row className="mb-4">
         <Col>
-          <h2 className="fw-bold mb-2">
+          <h1 className="h2 fw-bold mb-2">
             <i className="fas fa-tasks me-2 text-primary"></i>
             {t('officer.assigned.title')}
-          </h2>
+          </h1>
         </Col>
       </Row>
 
@@ -88,6 +89,8 @@ function AssignedComplaints() {
 
       {isLoading ? (
         <LoadingState variant="table" label={t('officer.assigned.loading')} />
+      ) : isError ? (
+        <ErrorState message={t('officer.assigned.loadFailed')} onRetry={refetch} />
       ) : filteredComplaints.length === 0 ? (
         <Card className="border-0 shadow-sm">
           {(data || []).length === 0 ? (

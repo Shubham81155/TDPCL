@@ -4,7 +4,7 @@ import { Container, Card, Table, Spinner, Badge, Button, Modal, Form, Row, Col, 
 import { useSearchParams } from 'react-router-dom';
 import { useQuery } from 'react-query';
 import apiClient from '../../services/api';
-import { complaintKeys, useActiveOfficers, useAssignComplaint } from '../../hooks/useComplaints';
+import { complaintKeys, useActiveOfficers, useAssignComplaint, useInvalidateComplaintData } from '../../hooks/useComplaints';
 import { useWards } from '../../hooks/useWards';
 import useDateRange from '../../hooks/useDateRange';
 import DateRangeFilter from '../../components/admin/DateRangeFilter';
@@ -43,6 +43,8 @@ function AdminComplaints() {
   const { data: wardsData } = useWards();
   const { data: officersData } = useActiveOfficers();
   const assignComplaint = useAssignComplaint();
+  const invalidateComplaintData = useInvalidateComplaintData();
+  const [autoAssigning, setAutoAssigning] = useState(false);
   const complaints = useMemo(() => complaintsData || [], [complaintsData]);
   const officers = useMemo(() => officersData || [], [officersData]);
   const [statusFilter, setStatusFilter] = useState(() => {
@@ -190,15 +192,42 @@ function AdminComplaints() {
     activeChips.push({ key: 'dates', label: tt('chipDates', { value: rangeText }), remove: range.clear });
   }
 
+  const waitingCount = complaints.filter((c) => c.status === 'new').length;
+
+  const runAutoAssign = async () => {
+    setAutoAssigning(true);
+    try {
+      const { data } = await apiClient.post('/assignments/auto-assign-unassigned');
+      if (data.assigned > 0) {
+        toast.success(tt('autoAssignDone', { assigned: data.assigned, remaining: data.remaining }));
+      } else {
+        toast(tt('autoAssignNone'));
+      }
+      await invalidateComplaintData();
+    } catch (error) {
+      toast.error(error.response?.data?.error || tt('autoAssignFailed'));
+    } finally {
+      setAutoAssigning(false);
+    }
+  };
+
   const from = (currentPage - 1) * PAGE_SIZE + 1;
   const to = Math.min(currentPage * PAGE_SIZE, filtered.length);
 
   return (
     <Container className="py-3 py-md-4">
-      <h1 className="h2 fw-bold mb-3 mb-md-4">
-        <i className="fas fa-list me-2 text-success" aria-hidden="true"></i>
-        {tt('title')}
-      </h1>
+      <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3 mb-md-4">
+        <h1 className="h2 fw-bold mb-0">
+          <i className="fas fa-list me-2 text-success" aria-hidden="true"></i>
+          {tt('title')}
+        </h1>
+        {waitingCount > 0 && (
+          <Button variant="outline-success" style={TAP} onClick={runAutoAssign} disabled={autoAssigning}>
+            <i className="fas fa-wand-magic-sparkles me-2" aria-hidden="true"></i>
+            {autoAssigning ? tt('autoAssigning') : tt('autoAssignWaiting', { count: waitingCount })}
+          </Button>
+        )}
+      </div>
 
       <div className="d-flex flex-wrap gap-2 mb-3" role="group" aria-label={tt('filterByStatus')}>
         {chips.map((s) => (

@@ -30,7 +30,7 @@ describe('Admin Analytics', () => {
   it('renders labelled charts, links and a card list for narrow screens', () => {
     useAdminAnalytics.mockReturnValue({ isLoading: false, data });
     renderPage();
-    expect(screen.getByRole('heading', { level: 2, name: 'Analytics' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Analytics' })).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Bar chart of complaints by ward/ })).toBeInTheDocument();
     expect(screen.getByRole('table', { name: 'Top officers ranked by resolved complaints' })).toBeInTheDocument();
     expect(screen.getAllByRole('link', { name: /Ravi/ }).length).toBe(2);

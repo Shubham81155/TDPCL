@@ -25,7 +25,7 @@ class ErrorBoundary extends React.Component {
     const { t } = this.context;
     return (
       <div className="container py-5 text-center" role="alert">
-        <h2 className="fw-bold mb-2">{t('common.errorBoundary.title')}</h2>
+        <h1 className="h2 fw-bold mb-2">{t('common.errorBoundary.title')}</h1>
         <p className="text-muted mb-4">{t('common.errorBoundary.text')}</p>
         <button type="button" className="btn btn-success me-2" onClick={() => window.location.reload()}>
           {t('common.errorBoundary.reload')}

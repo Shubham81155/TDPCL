@@ -203,10 +203,10 @@ function AdminAnalytics() {
 
   return (
     <Container className="py-4">
-      <h2 className="fw-bold mb-3">
+      <h1 className="h2 fw-bold mb-3">
         <i className="fas fa-chart-bar me-2 text-success" aria-hidden="true"></i>
         {t('admin.analytics.title')}
-      </h2>
+      </h1>
       <div className="mb-2 text-body-secondary small">
         {t('admin.analytics.showing')}{' '}
         <span className="badge text-bg-secondary">{describeRangeText(t, formatDate, range.from, range.to)}</span>

@@ -58,6 +58,28 @@ Rules of thumb used throughout:
 - **Constraints carry invariants** that code also checks: unique ward per (lower(name), lower(city)), latitude/longitude ranges, confidence 0..1, reset-token expiry after creation, `updated_at` maintained by a trigger (migration 006).
 - **Migrations** are plain SQL files applied once, in name order, by `npm run migrate` (tracked in `schema_migrations`). Development seed files (`002`, `003`) are skipped when `NODE_ENV=production` unless `RUN_SEED_MIGRATIONS=true`.
 
+### Complaint assignment
+
+A complaint is routed to an officer as soon as it is saved (`assignmentService.autoAssignComplaint`).
+The officer is chosen in strict tiers:
+
+1. **Ward match.** An active officer whose `assigned_ward_id` is the complaint's ward.
+2. **Area match.** An active officer with no ward whose `assigned_area_name` equals the ward (or complaint area) name, or starts with it followed by a space or `-` ("Ward 1 - Central" matches "Ward 1", never "Ward 10").
+3. **Nearest officer.** The closest active officer with a known location, within `ASSIGN_MAX_RADIUS_KM`.
+
+Inside the winning tier: officers under `ASSIGN_MAX_OPEN_PER_OFFICER` open complaints come first, then the nearest (distances within 100 m count as equal), then the one with the fewest open complaints. Officers who are `on_leave` or `inactive` are never chosen.
+
+- **Why history shows a reason.** Each assignment writes `Auto-assigned to Officer: X (ward match, 1.2 km away)` to `complaint_history`.
+- **No double assignment.** The decision and the update run in one transaction behind `pg_advisory_xact_lock`, so concurrent submissions see each other's workload.
+- **Officer location.** Choosing a ward on the officer form sets the area name from the ward and defaults the officer's location to the ward centroid (`location_source = 'ward'`). A location the officer reports themselves (`'reported'`) is never overwritten.
+- **Nothing is left waiting.** If no officer qualifies the complaint stays `new`. It is retried when an officer is created, changes ward, returns from leave, is deactivated or deleted, every `ASSIGN_RETRY_INTERVAL_MIN` minutes (default 10, `0` disables), and on demand from the admin Complaints page (`POST /assignments/auto-assign-unassigned`). Work not yet started is released from an officer who goes on leave; everything open is released when an officer is deactivated or deleted.
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `ASSIGN_MAX_RADIUS_KM` | 10 | Farthest an officer outside the complaint's ward/area may be (tier 3) |
+| `ASSIGN_MAX_OPEN_PER_OFFICER` | 20 | Officers at or above this are used only when no one else in the tier qualifies |
+| `ASSIGN_RETRY_INTERVAL_MIN` | 10 | Period of the background retry; `0` turns it off |
+
 ## 3. Frontend
 
 - **Create React App + React Router v6.** Every page is lazy-loaded (`React.lazy` + `Suspense`); the main bundle is roughly half its former size, and chart code loads only on the admin analytics/dashboard pages.
@@ -79,7 +101,7 @@ Ordered roughly by value:
 2. **Access tokens live in `localStorage`.** An XSS bug would expose them. Prefer httpOnly, SameSite cookies for the refresh token.
 3. **No refresh-token revocation.** A stolen refresh token is valid until it expires. A `refresh_tokens` table (hash, user, expiry, revoked) would allow logout-everywhere and rotation with reuse detection.
 4. **Notifications are fire-and-forget.** Emails are sent in-process and failures are only logged. A job queue (the unused Bull/Redis dependencies were meant for this) would add retries.
-5. **Auto-assignment is a single greedy query.** It runs outside the request's transaction; two simultaneous complaints can both pick the same least-loaded officer. Acceptable at this scale; use `SELECT ... FOR UPDATE SKIP LOCKED` if it matters.
+5. **Auto-assignment is serialised globally.** One advisory lock orders all assignment decisions. That is correct and cheap at municipal scale; shard the lock per ward if throughput ever matters.
 6. **Soft deletes.** Hard-deleting officers/users is allowed. If an audit trail of who existed matters, add `deleted_at` instead.
 7. **No integration tests in CI.** The end-to-end API and browser checks were run manually against a real database; wiring them to a Postgres service container in CI would catch regressions like a broken route pattern earlier. A unit test now guards the complaint route patterns specifically.
 8. **Timestamps are `timestamp` without time zone**, and `complaint_history` status columns are `varchar` rather than the enum. Both are cheap to fix in a future migration but need a data check.

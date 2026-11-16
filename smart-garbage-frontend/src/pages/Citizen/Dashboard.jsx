@@ -4,6 +4,7 @@ import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useMyComplaints, useMyComplaintSummary } from '../../hooks/useComplaints';
 import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import StatCard from '../../components/common/StatCard';
 import Skeleton from '../../components/common/Skeleton';
 import StatusBadge from '../../components/common/StatusBadge';
@@ -24,7 +25,7 @@ function CitizenDashboard() {
     title: t(`citizen.dashboard.steps.${s.key}Title`),
     text: t(`citizen.dashboard.steps.${s.key}Text`),
   }));
-  const { data, isLoading } = useMyComplaints();
+  const { data, isLoading, isError, refetch } = useMyComplaints();
   const { data: summary, isLoading: summaryLoading } = useMyComplaintSummary();
   const { user } = useAuth();
 
@@ -76,10 +77,10 @@ function CitizenDashboard() {
     <Container className="py-4">
       <Row className="mb-4">
         <Col>
-          <h2 className="fw-bold mb-2">
+          <h1 className="h2 fw-bold mb-2">
             <i className="fas fa-home me-2 text-success" aria-hidden="true"></i>
             {t('citizen.dashboard.welcome', { name: user?.name || t('citizen.dashboard.citizenFallback') })}
-          </h2>
+          </h1>
           <p className="text-muted">{t('citizen.dashboard.subtitle')}</p>
         </Col>
         <Col md="auto">
@@ -91,6 +92,8 @@ function CitizenDashboard() {
           </Link>
         </Col>
       </Row>
+
+      {isError && !data && <ErrorState message={t('common.loadFailed')} onRetry={refetch} />}
 
       {statsLoading ? (
         <div className="mb-4">

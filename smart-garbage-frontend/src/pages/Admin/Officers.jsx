@@ -6,8 +6,10 @@ import toast from 'react-hot-toast';
 import LoadingState from '../../components/common/LoadingState';
 import EmptyState from '../../components/common/EmptyState';
 import ErrorState from '../../components/common/ErrorState';
+import ConfirmModal from '../../components/common/ConfirmModal';
 import { useTranslation } from '../../i18n/LanguageContext';
 import { queryClient } from '../../queryClient';
+import { useWards } from '../../hooks/useWards';
 
 const touch = { minHeight: 44 };
 
@@ -40,7 +42,7 @@ function DeleteButton({ officer, busy, onDelete, t }) {
       disabled={busy}
       aria-label={t('admin.officers.deleteAria', { email: officer.email })}
       title={t('admin.officers.delete')}
-      onClick={() => onDelete(officer.officer_id)}
+      onClick={() => onDelete(officer)}
     >
       <i className="fas fa-trash" aria-hidden="true"></i>
     </Button>
@@ -51,16 +53,19 @@ const emptyForm = () => ({
   email: '',
   password: '',
   employee_id: '',
-  assigned_area_name: '',
+  ward_id: '',
   year_of_joining: new Date().getFullYear(),
 });
 
 function AdminOfficers() {
   const { t } = useTranslation();
+  const { data: wardsData, isLoading: wardsLoading } = useWards();
+  const wards = wardsData || [];
   const [officers, setOfficers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [deleting, setDeleting] = useState(null);
+  const [pendingDelete, setPendingDelete] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [formData, setFormData] = useState(emptyForm());
@@ -92,7 +97,7 @@ function AdminOfficers() {
     if (!formData.password) newErrors.password = t('admin.officers.errPasswordRequired');
     else if (formData.password.length < 6) newErrors.password = t('admin.officers.errPasswordShort');
     if (!formData.employee_id) newErrors.employee_id = t('admin.officers.errEmployeeRequired');
-    if (!formData.assigned_area_name) newErrors.assigned_area_name = t('admin.officers.errAreaRequired');
+    if (!formData.ward_id) newErrors.ward_id = t('admin.officers.errAreaRequired');
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -121,7 +126,7 @@ function AdminOfficers() {
         email: formData.email,
         password: formData.password,
         employee_id: formData.employee_id,
-        assigned_area_name: formData.assigned_area_name,
+        ward_id: Number(formData.ward_id),
         year_of_joining: parseInt(formData.year_of_joining),
       });
 
@@ -136,8 +141,9 @@ function AdminOfficers() {
     }
   };
 
-  const handleDeleteOfficer = async (officerId) => {
-    if (!window.confirm(t('admin.officers.confirmDelete'))) return;
+  const handleDeleteOfficer = async () => {
+    const officerId = pendingDelete?.officer_id;
+    if (officerId == null) return;
     setDeleting(officerId);
     try {
       await apiClient.delete(`/officers/${officerId}`);
@@ -149,6 +155,7 @@ function AdminOfficers() {
       toast.error(t('admin.officers.deleteFailed'));
     } finally {
       setDeleting(null);
+      setPendingDelete(null);
     }
   };
 
@@ -188,10 +195,10 @@ function AdminOfficers() {
   return (
     <Container className="py-4">
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-        <h2 className="fw-bold mb-0">
+        <h1 className="h2 fw-bold mb-0">
           <i className="fas fa-users me-2 text-primary" aria-hidden="true"></i>
           {t('admin.officers.title')}
-        </h2>
+        </h1>
         <Button variant="success" style={touch} onClick={() => setShowModal(true)}>
           <i className="fas fa-plus me-2" aria-hidden="true"></i>
           {t('admin.officers.add')}
@@ -266,7 +273,7 @@ function AdminOfficers() {
                       <StatusPill status={officer.status} t={t} />
                     </td>
                     <td>
-                      <DeleteButton officer={officer} busy={deleting === officer.officer_id} onDelete={handleDeleteOfficer} t={t} />
+                      <DeleteButton officer={officer} busy={deleting === officer.officer_id} onDelete={setPendingDelete} t={t} />
                     </td>
                   </tr>
                 ))}
@@ -281,7 +288,7 @@ function AdminOfficers() {
                   <Card.Body>
                     <div className="d-flex justify-content-between align-items-start gap-2">
                       <div className="fw-bold text-break">{officer.email}</div>
-                      <DeleteButton officer={officer} busy={deleting === officer.officer_id} onDelete={handleDeleteOfficer} t={t} />
+                      <DeleteButton officer={officer} busy={deleting === officer.officer_id} onDelete={setPendingDelete} t={t} />
                     </div>
                     <dl className="row small mb-2 mt-2 g-1">
                       <dt className="col-5 text-muted fw-normal">{t('admin.officers.colEmployeeId')}</dt>
@@ -311,7 +318,30 @@ function AdminOfficers() {
             {field('email', t('admin.officers.fieldEmail'), { type: 'email', placeholder: t('admin.officers.phEmail'), autoComplete: 'off' })}
             {field('password', t('admin.officers.fieldPassword'), { type: 'password', placeholder: t('admin.officers.phPassword'), autoComplete: 'new-password' })}
             {field('employee_id', t('admin.officers.fieldEmployeeId'), { type: 'text', placeholder: t('admin.officers.phEmployeeId') })}
-            {field('assigned_area_name', t('admin.officers.fieldArea'), { type: 'text', placeholder: t('admin.officers.phArea') })}
+            <Form.Group className="mb-3" controlId="officer-ward_id">
+              <Form.Label>{t('admin.officers.fieldArea')}</Form.Label>
+              <Form.Select
+                name="ward_id"
+                value={formData.ward_id}
+                onChange={handleChange}
+                isInvalid={!!errors.ward_id}
+                aria-invalid={!!errors.ward_id}
+                aria-describedby={errors.ward_id ? 'officer-ward_id-error' : 'officer-ward_id-help'}
+                disabled={wardsLoading}
+                style={touch}
+              >
+                <option value="">{t('admin.officers.phArea')}</option>
+                {wards.map((w) => (
+                  <option key={w.ward_id} value={w.ward_id}>
+                    {w.name}{w.city ? ` (${w.city})` : ''}
+                  </option>
+                ))}
+              </Form.Select>
+              <Form.Control.Feedback type="invalid" id="officer-ward_id-error">
+                {errors.ward_id}
+              </Form.Control.Feedback>
+              <Form.Text id="officer-ward_id-help" muted>{t('admin.officers.areaHelp')}</Form.Text>
+            </Form.Group>
             {field('year_of_joining', t('admin.officers.fieldYear'), { type: 'number', min: '2000', max: new Date().getFullYear() })}
 
             <div className="d-grid gap-2">
@@ -325,6 +355,14 @@ function AdminOfficers() {
           </Form>
         </Modal.Body>
       </Modal>
+      <ConfirmModal
+        show={!!pendingDelete}
+        message={t('admin.officers.confirmDelete')}
+        confirmLabel={t('admin.officers.delete')}
+        busy={deleting !== null}
+        onConfirm={handleDeleteOfficer}
+        onCancel={() => setPendingDelete(null)}
+      />
     </Container>
   );
 }

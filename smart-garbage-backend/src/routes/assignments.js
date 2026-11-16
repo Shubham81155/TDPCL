@@ -21,6 +21,21 @@ router.post('/auto-assign/:complaintId', verifyToken, checkRole('admin', 'office
   });
 });
 
+// Retry auto-assignment for every complaint still waiting for an officer (admin)
+router.post('/auto-assign-unassigned', verifyToken, checkRole('admin'), async (req, res) => {
+  const result = await assignmentService.assignUnassigned();
+
+  res.json({
+    success: true,
+    message: result.assigned
+      ? `${result.assigned} complaint(s) assigned`
+      : result.checked
+        ? 'No available officer for the waiting complaints'
+        : 'No complaints are waiting for an officer',
+    ...result,
+  });
+});
+
 // Manually assign complaint (Admin override)
 router.post('/assign/:complaintId', verifyToken, checkRole('admin'), async (req, res) => {
   const complaintId = parseId(req.params.complaintId, 'complaint id');

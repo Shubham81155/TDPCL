@@ -27,7 +27,7 @@ describe('Officer journey', () => {
     beforeEach(() => cy.loginAs('officer', '/officer/complaints'));
 
     it('lists the assigned complaints', () => {
-      cy.contains('h2', 'Assigned Complaints').should('be.visible');
+      cy.contains('h1', 'Assigned Complaints').should('be.visible');
       cy.get('tbody tr').should('have.length.greaterThan', 0);
     });
 

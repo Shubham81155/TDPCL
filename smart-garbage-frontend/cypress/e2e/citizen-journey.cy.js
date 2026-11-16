@@ -97,7 +97,7 @@ describe('Citizen journey', () => {
     beforeEach(() => cy.loginAs('citizen', '/citizen/complaints'));
 
     it('lists my complaints', () => {
-      cy.contains('h2', 'My Complaints').should('be.visible');
+      cy.contains('h1', 'My Complaints').should('be.visible');
       cy.get('tbody tr').should('have.length.greaterThan', 0);
     });
 

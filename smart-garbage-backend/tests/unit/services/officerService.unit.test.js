@@ -1,5 +1,5 @@
 jest.mock('../../../src/config/database', () => {
-  const tx = { oneOrNone: jest.fn(), one: jest.fn(), none: jest.fn() };
+  const tx = { oneOrNone: jest.fn(), one: jest.fn(), none: jest.fn(), manyOrNone: jest.fn() };
   return {
     db: {
       oneOrNone: jest.fn(), one: jest.fn(), none: jest.fn(), manyOrNone: jest.fn(), tx: jest.fn(), _tx: tx,
@@ -7,13 +7,20 @@ jest.mock('../../../src/config/database', () => {
   };
 });
 
+jest.mock('../../../src/services/assignmentService', () => ({
+  retryUnassignedSafely: jest.fn().mockResolvedValue(null),
+}));
+
 const bcrypt = require('bcryptjs');
+const { retryUnassignedSafely } = require('../../../src/services/assignmentService');
 const { db } = require('../../../src/config/database');
 const svc = require('../../../src/services/officerService');
 
 beforeEach(() => {
   ['oneOrNone', 'one', 'none', 'manyOrNone', 'tx'].forEach((k) => db[k].mockReset());
-  ['oneOrNone', 'one', 'none'].forEach((k) => db._tx[k].mockReset());
+  ['oneOrNone', 'one', 'none', 'manyOrNone'].forEach((k) => db._tx[k].mockReset());
+  db._tx.manyOrNone.mockResolvedValue([]);
+  retryUnassignedSafely.mockClear();
   db.tx.mockImplementation((cb) => cb(db._tx));
 });
 
@@ -100,6 +107,19 @@ describe('createOfficer', () => {
     expect(db._tx.one.mock.calls[1][1]).toEqual([8, 'E1', null, 'A', 2020]);
     expect(db._tx.none).toHaveBeenCalledWith(expect.stringContaining('user_preferences'), [8, 'p']);
   });
+  it('a ward sets the area name from the ward, centres the officer on it and retries the queue', async () => {
+    db._tx.oneOrNone.mockResolvedValueOnce({ ward_id: 7, name: 'Ward 7' });
+    db._tx.one.mockResolvedValueOnce({ user_id: 8, name: 'N' }).mockResolvedValueOnce({ officer_id: 3, user_id: 8 });
+    await svc.createOfficer({ ...data, ward_id: 7, area_name: 'ignored' });
+    expect(db._tx.one.mock.calls[1][1]).toEqual([8, 'E1', 7, 'Ward 7', 2020]);
+    expect(db._tx.none).toHaveBeenCalledWith(expect.stringContaining('ST_Centroid'), [3]);
+    expect(retryUnassignedSafely).toHaveBeenCalledTimes(1);
+  });
+  it('rejects an unknown ward before creating anything', async () => {
+    db._tx.oneOrNone.mockResolvedValueOnce(null);
+    await expect(svc.createOfficer({ ...data, ward_id: 99 })).rejects.toMatchObject({ status: 400, message: 'Ward not found' });
+    expect(db._tx.one).not.toHaveBeenCalled();
+  });
   it('stores the officer email trimmed and lower-cased', async () => {
     db._tx.one.mockResolvedValueOnce({ user_id: 8, name: 'N' }).mockResolvedValueOnce({ officer_id: 3, user_id: 8 });
     await svc.createOfficer({ ...data, email: '  Officer@Example.COM ' });
@@ -124,6 +144,31 @@ describe('updateOfficer', () => {
     const r = await svc.updateOfficer(1, { name: 'N' });
     expect(r).toEqual({ officer_id: 1, status: 'active' });
     expect(db._tx.none.mock.calls[0][1]).toEqual([5, 'N', undefined]);
+  });
+  it('changing ward validates it, syncs the area name, re-centres and retries the queue', async () => {
+    db._tx.oneOrNone
+      .mockResolvedValueOnce({ ward_id: 4, name: 'Ward 4' })
+      .mockResolvedValueOnce({ officer_id: 1, user_id: 5, assigned_ward_id: 4, assigned_area_name: 'Ward 4', status: 'active' });
+    const r = await svc.updateOfficer(1, { assigned_ward_id: 4, assigned_area_name: 'typed by hand' });
+    expect(db._tx.oneOrNone.mock.calls[1][1]).toEqual([1, 4, 'Ward 4', undefined]);
+    expect(db._tx.none).toHaveBeenCalledWith(expect.stringContaining('ST_Centroid'), [1]);
+    expect(r.assigned_area_name).toBe('Ward 4');
+    expect(retryUnassignedSafely).toHaveBeenCalledTimes(1);
+  });
+  it('unknown ward on update is a 400', async () => {
+    db._tx.oneOrNone.mockResolvedValueOnce(null);
+    await expect(svc.updateOfficer(1, { assigned_ward_id: 99 })).rejects.toMatchObject({ status: 400 });
+  });
+  it('on_leave releases only work not yet started; active triggers a retry', async () => {
+    db._tx.oneOrNone.mockResolvedValue({ officer_id: 1, user_id: 5, status: 'on_leave' });
+    db._tx.manyOrNone.mockResolvedValueOnce([{ complaint_id: 11, status: 'assigned' }]);
+    await svc.updateOfficer(1, { status: 'on_leave' });
+    expect(db._tx.manyOrNone.mock.calls[0][1]).toEqual([1, ['assigned']]);
+    expect(db._tx.none).toHaveBeenCalledWith(expect.stringContaining("status = 'new'"), [[11]]);
+    expect(retryUnassignedSafely).toHaveBeenCalledTimes(1);
+    retryUnassignedSafely.mockClear();
+    await svc.updateOfficer(1, { status: 'active' });
+    expect(retryUnassignedSafely).toHaveBeenCalledTimes(1);
   });
   it('skips user update with only officer fields; default arg works', async () => {
     db._tx.oneOrNone.mockResolvedValue({ officer_id: 1, user_id: 5 });
@@ -152,13 +197,23 @@ describe('updateOfficerLocation', () => {
 });
 
 describe('deactivate / delete', () => {
+  it('delete queues the officer\'s open complaints for re-assignment before removing the officer', async () => {
+    db._tx.oneOrNone.mockResolvedValueOnce({ user_id: 6 });
+    db._tx.manyOrNone.mockResolvedValueOnce([{ complaint_id: 3, status: 'in_progress' }]);
+    await svc.deleteOfficer(1);
+    expect(db._tx.none.mock.calls[0][0]).toContain("status = 'new'");
+    expect(db._tx.none.mock.calls[2][0]).toContain('DELETE FROM officers');
+  });
   it('deactivate: 404, success releases complaints, wraps error', async () => {
     db._tx.oneOrNone.mockResolvedValueOnce(null);
     await expect(svc.deactivateOfficer(1)).rejects.toMatchObject({ status: 404 });
     expect(db._tx.none).not.toHaveBeenCalled();
     db._tx.oneOrNone.mockResolvedValueOnce({ officer_id: 1, status: 'inactive' });
+    db._tx.manyOrNone.mockResolvedValueOnce([{ complaint_id: 7, status: 'assigned' }]);
     expect(await svc.deactivateOfficer(1)).toEqual({ officer_id: 1, status: 'inactive' });
     expect(db._tx.none.mock.calls[0][0]).toContain("status = 'new'");
+    expect(db._tx.none.mock.calls[1][0]).toContain('complaint_history');
+    expect(retryUnassignedSafely).toHaveBeenCalledTimes(1);
     db.tx.mockRejectedValueOnce(new Error('x'));
     await expect(svc.deactivateOfficer(1)).rejects.toMatchObject({ status: 500 });
   });
@@ -168,6 +223,7 @@ describe('deactivate / delete', () => {
     db._tx.oneOrNone.mockResolvedValueOnce({ user_id: 6 });
     await svc.deleteOfficer(1);
     expect(db._tx.none.mock.calls[0][0]).toContain('DELETE FROM officers');
+    expect(retryUnassignedSafely).toHaveBeenCalledTimes(1);
     expect(db._tx.none.mock.calls[1]).toEqual([expect.stringContaining('DELETE FROM users'), [6]]);
     db.tx.mockRejectedValueOnce(Object.assign(new Error('fk'), { code: '23503' }));
     await expect(svc.deleteOfficer(1)).rejects.toMatchObject({ code: '23503' });
