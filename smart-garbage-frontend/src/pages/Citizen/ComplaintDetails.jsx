@@ -3,8 +3,8 @@ import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Badge, Button, Alert } from 'react-bootstrap';
 import { useParams, useNavigate } from 'react-router-dom';
 import apiClient from '../../services/api';
-import toast from 'react-hot-toast';
 import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import StatusBadge, { UrgencyBadge, STATUS_ICONS } from '../../components/common/StatusBadge';
 import { useTranslation } from '../../i18n/LanguageContext';
 import { categoryLabel, statusLabel } from '../../i18n/labels';
@@ -16,6 +16,7 @@ function ComplaintDetails() {
   const [complaint, setComplaint] = useState(null);
   const [timeline, setTimeline] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     loadComplaintDetails();
@@ -25,12 +26,16 @@ function ComplaintDetails() {
   }, [id]);
 
   const loadComplaintDetails = async () => {
+    setLoadError(false);
     try {
       const response = await apiClient.get(`/complaints/${id}`);
       setComplaint(response.data.complaint);
     } catch (error) {
-      toast.error(t('citizen.details.loadFailed'));
-      navigate('/citizen/complaints');
+      if (error.response?.status === 404) {
+        setComplaint(null);
+      } else {
+        setLoadError(true);
+      }
     } finally {
       setIsLoading(false);
     }
@@ -54,6 +59,15 @@ function ComplaintDetails() {
     return (
       <Container className="py-4">
         <LoadingState variant="detail" label={t('citizen.details.loading')} />
+      </Container>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Container className="py-5">
+        <ErrorState message={t('citizen.details.loadFailed')} onRetry={() => { setIsLoading(true); loadComplaintDetails(); }} />
+        <Button onClick={() => navigate('/citizen/complaints')}>{t('citizen.details.back')}</Button>
       </Container>
     );
   }

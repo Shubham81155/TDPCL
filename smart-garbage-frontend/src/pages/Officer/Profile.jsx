@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Container, Row, Col, Card, Form } from 'react-bootstrap';
 import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../i18n/LanguageContext';
 import apiClient from '../../services/api';
@@ -13,6 +14,7 @@ function OfficerProfile() {
   const [profile, setProfile] = useState(null);
   const [metrics, setMetrics] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState(false);
 
   useEffect(() => {
     loadProfileAndMetrics();
@@ -21,6 +23,7 @@ function OfficerProfile() {
   }, []);
 
   const loadProfileAndMetrics = async () => {
+    setLoadError(false);
     try {
       const profileResponse = await apiClient.get('/officers/me');
       setProfile(profileResponse.data.officer);
@@ -29,6 +32,7 @@ function OfficerProfile() {
       setMetrics(metricsResponse.data.metrics);
     } catch (error) {
       toast.error(t('officer.profile.loadFailed'));
+      setLoadError(true);
     } finally {
       setIsLoading(false);
     }
@@ -38,6 +42,17 @@ function OfficerProfile() {
     return (
       <Container className="py-4">
         <LoadingState variant="detail" label={t('officer.profile.loading')} />
+      </Container>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <Container className="py-4">
+        <ErrorState
+          message={t('officer.profile.loadFailed')}
+          onRetry={() => { setIsLoading(true); loadProfileAndMetrics(); }}
+        />
       </Container>
     );
   }

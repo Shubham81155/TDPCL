@@ -4,12 +4,13 @@ import { Container, Row, Col, Card, Button } from 'react-bootstrap';
 import { Link } from 'react-router-dom';
 import { useAssignedComplaints } from '../../hooks/useComplaints';
 import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import EmptyState from '../../components/common/EmptyState';
 import { useAuth } from '../../context/AuthContext';
 import { useTranslation } from '../../i18n/LanguageContext';
 
 function OfficerDashboard() {
-  const { data, isLoading } = useAssignedComplaints();
+  const { data, isLoading, isError, refetch } = useAssignedComplaints();
   const { user } = useAuth();
   const { t } = useTranslation();
 
@@ -55,6 +56,8 @@ function OfficerDashboard() {
 
       {isLoading ? (
         <LoadingState variant="cards" label={t('officer.dashboard.loading')} />
+      ) : isError ? (
+        <ErrorState message={t('common.loadFailed')} onRetry={refetch} />
       ) : (
         <>
           <Row className="mb-4">

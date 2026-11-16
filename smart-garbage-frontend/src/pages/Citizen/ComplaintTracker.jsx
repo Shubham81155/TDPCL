@@ -4,6 +4,7 @@ import { Container, Row, Col, Card, Table, Button, Form, Pagination } from 'reac
 import { Link } from 'react-router-dom';
 import { useMyComplaints } from '../../hooks/useComplaints';
 import LoadingState from '../../components/common/LoadingState';
+import ErrorState from '../../components/common/ErrorState';
 import EmptyState from '../../components/common/EmptyState';
 import StatusBadge, { UrgencyBadge } from '../../components/common/StatusBadge';
 import { COMPLAINT_CATEGORIES } from '../../utils/classificationUtils';
@@ -15,7 +16,7 @@ function ComplaintTracker() {
   const [filters, setFilters] = useState({ status: '', category: '' });
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 10;
-  const { data, isLoading } = useMyComplaints();
+  const { data, isLoading, isError, refetch } = useMyComplaints();
 
   const filteredComplaints = useMemo(
     () =>
@@ -102,6 +103,8 @@ function ComplaintTracker() {
 
       {isLoading ? (
         <LoadingState variant="table" label={t('citizen.tracker.loading')} />
+      ) : isError ? (
+        <ErrorState message={t('common.loadFailed')} onRetry={refetch} />
       ) : filteredComplaints.length === 0 ? (
         <Card className="border-0 shadow-sm">
           {(data || []).length === 0 ? (
