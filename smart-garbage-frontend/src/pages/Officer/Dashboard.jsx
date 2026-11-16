@@ -44,10 +44,10 @@ function OfficerDashboard() {
     <Container className="py-4">
       <Row className="mb-4">
         <Col>
-          <h2 className="fw-bold mb-2">
+          <h1 className="h2 fw-bold mb-2">
             <i className="fas fa-home me-2 text-primary"></i>
             {t('officer.dashboard.title')}
-          </h2>
+          </h1>
           <p className="text-muted">
             {t('officer.dashboard.welcome', { name: user?.name || t('officer.dashboard.officerFallback') })}
           </p>

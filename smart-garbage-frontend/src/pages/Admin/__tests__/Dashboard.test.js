@@ -29,7 +29,7 @@ describe('Admin Dashboard', () => {
       data: { total_complaints: 10, resolved_count: 5, new_count: 2, in_progress_count: 3, high_urgency_count: 1, avg_resolution_hours: 4 },
     });
     renderPage();
-    expect(screen.getByRole('heading', { level: 2, name: /Admin Dashboard/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: /Admin Dashboard/ })).toBeInTheDocument();
     expect(screen.getByText('5 of 10 resolved')).toBeInTheDocument();
     expect(screen.getByText('4.0h')).toBeInTheDocument();
     expect(screen.getByRole('img', { name: /Doughnut chart of complaint status distribution: New 2/ })).toBeInTheDocument();

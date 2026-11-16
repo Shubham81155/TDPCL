@@ -84,10 +84,10 @@ function AdminDashboard() {
     <Container className="py-4">
       <Row className="mb-4">
         <Col>
-          <h2 className="fw-bold mb-2">
+          <h1 className="h2 fw-bold mb-2">
             <i className="fas fa-chart-line me-2 text-success" aria-hidden="true"></i>
             {t('admin.dashboard.title')}
-          </h2>
+          </h1>
           <p className="text-body-secondary mb-3">
             {t('admin.dashboard.subtitle')}
             <span className="ms-2 badge text-bg-secondary" data-testid="active-range">

@@ -61,10 +61,10 @@ function AssignedComplaints() {
     <Container className="py-4">
       <Row className="mb-4">
         <Col>
-          <h2 className="fw-bold mb-2">
+          <h1 className="h2 fw-bold mb-2">
             <i className="fas fa-tasks me-2 text-primary"></i>
             {t('officer.assigned.title')}
-          </h2>
+          </h1>
         </Col>
       </Row>
 

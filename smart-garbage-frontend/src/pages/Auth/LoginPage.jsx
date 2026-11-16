@@ -63,7 +63,7 @@ function LoginPage() {
         <Card.Body className="p-5">
           <div className="text-center mb-4">
             <i className="fas fa-trash text-success" style={{ fontSize: '3rem' }}></i>
-            <h2 className="mt-3 fw-bold">{t('common.brand')}</h2>
+            <h1 className="h2 mt-3 fw-bold">{t('common.brand')}</h1>
             <p className="text-muted">{t('auth.login.subtitle')}</p>
           </div>
 

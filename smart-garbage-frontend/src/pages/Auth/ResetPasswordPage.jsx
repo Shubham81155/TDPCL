@@ -59,7 +59,7 @@ function ResetPasswordPage() {
         <Card.Body className="p-5">
           <div className="text-center mb-4">
             <i className="fas fa-key text-warning" style={{ fontSize: '3rem' }}></i>
-            <h2 className="mt-3 fw-bold">{t('auth.reset.title')}</h2>
+            <h1 className="h2 mt-3 fw-bold">{t('auth.reset.title')}</h1>
           </div>
 
           {showInvalid ? (

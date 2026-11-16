@@ -192,10 +192,10 @@ function AdminOfficers() {
   return (
     <Container className="py-4">
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-4">
-        <h2 className="fw-bold mb-0">
+        <h1 className="h2 fw-bold mb-0">
           <i className="fas fa-users me-2 text-primary" aria-hidden="true"></i>
           {t('admin.officers.title')}
-        </h2>
+        </h1>
         <Button variant="success" style={touch} onClick={() => setShowModal(true)}>
           <i className="fas fa-plus me-2" aria-hidden="true"></i>
           {t('admin.officers.add')}

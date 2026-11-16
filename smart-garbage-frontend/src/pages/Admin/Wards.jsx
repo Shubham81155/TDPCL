@@ -177,10 +177,10 @@ function AdminWards() {
     <Container className="py-4">
       <div className="mb-4 d-flex flex-wrap justify-content-between align-items-start gap-2">
         <div>
-          <h2 className="fw-bold mb-1">
+          <h1 className="h2 fw-bold mb-1">
             <i className="fas fa-map me-2 text-success" aria-hidden="true"></i>
             {t('admin.wards.title')}
-          </h2>
+          </h1>
           <p className="text-muted mb-0">{t('admin.wards.subtitle')}</p>
         </div>
         <Button variant="success" style={touch} onClick={openCreate}>

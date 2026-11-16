@@ -42,10 +42,10 @@ function ComplaintTracker() {
     <Container className="py-4">
       <Row className="mb-4">
         <Col>
-          <h2 className="fw-bold mb-2">
+          <h1 className="h2 fw-bold mb-2">
             <i className="fas fa-list me-2 text-success"></i>
             {t('nav.myComplaints')}
-          </h2>
+          </h1>
           <p className="text-muted">{t('citizen.tracker.subtitle')}</p>
         </Col>
         <Col md="auto">

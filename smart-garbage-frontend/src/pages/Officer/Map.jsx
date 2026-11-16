@@ -134,10 +134,10 @@ function OfficerMap() {
 
   return (
     <Container className="py-4">
-      <h2 className="fw-bold mb-4">
+      <h1 className="h2 fw-bold mb-4">
         <i className="fas fa-map-marked-alt me-2 text-primary"></i>
         {t('officer.map.title')}
-      </h2>
+      </h1>
 
       {isLoading ? (
         <LoadingState variant="table" label={t('officer.map.loading')} />
